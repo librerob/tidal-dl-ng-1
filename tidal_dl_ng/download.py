@@ -386,6 +386,7 @@ class Download:
         quality_audio: Quality | None = None,
         quality_video: QualityVideo | None = None,
         is_parent_album: bool = False,
+        repair: bool = False,
         playlist: str | None = None,
     ) -> tuple[bool, pathlib.Path | str]:
         try:
@@ -395,7 +396,7 @@ class Download:
                 return False, ""
             status, path = self._item(
                 file_template, media, media_id, media_type, video_download, download_delay,
-                quality_audio, quality_video, is_parent_album,
+                quality_audio, quality_video, is_parent_album, repair,
             )
         except DownloadStopped:
             if playlist is not None:
@@ -422,6 +423,7 @@ class Download:
         quality_audio: Quality | None = None,
         quality_video: QualityVideo | None = None,
         is_parent_album: bool = False,
+        repair: bool = False,
     ) -> (bool, pathlib.Path):
         try:
             if media_id and media_type:
@@ -469,7 +471,7 @@ class Download:
         # Compute if and how downloads need to be skipped.
         skip_download: bool = False
 
-        if self.skip_existing:
+        if self.skip_existing and not repair:
             skip_file: bool = check_media_exists(path_media_dst)
 
             if self.settings.data.symlink_to_track and not isinstance(media, Video):
@@ -887,6 +889,7 @@ class Download:
     def _run_playlist(self, items, progress, task, result_paths, progress_stdout, media_options, checkpoint=None):
         if checkpoint is not None:
             result_paths.update(checkpoint.completed())
+        repair_positions = checkpoint.recorded_positions() - result_paths.keys() if checkpoint is not None else set()
         completed = len(result_paths)
         progress.advance(task, completed)
         remaining = ((index, track) for index, track in enumerate(items) if index not in result_paths)
@@ -903,7 +906,8 @@ class Download:
                         if entry is None:
                             break
                         index, track = entry
-                        pending[executor.submit(self.item, media=track, **media_options)] = index
+                        options = {**media_options, "repair": True} if index in repair_positions else media_options
+                        pending[executor.submit(self.item, media=track, **options)] = index
                 if not pending:
                     break
 
