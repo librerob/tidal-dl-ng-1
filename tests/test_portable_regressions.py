@@ -49,6 +49,6 @@ def test_playlist_stops_scheduling_when_breaker_opens():
     progress = Progress()
     tracks = ["one", "two", "three"]
     task = progress.add_task("playlist", total=len(tracks))
-    assert download._run_playlist(tracks, progress, task, [], True, {}) == 1
+    assert download._run_playlist(tracks, progress, task, {}, True, {}) == 1
     assert attempted == ["one"]
     assert progress.tasks[task].completed == 1

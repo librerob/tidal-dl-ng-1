@@ -6,7 +6,8 @@ import shutil
 import tempfile
 from collections.abc import Callable
 from concurrent import futures
-from threading import Event, Lock
+from functools import partial
+from threading import BoundedSemaphore, Event, Lock
 from uuid import uuid4
 
 import m3u8
@@ -50,6 +51,7 @@ from tidal_dl_ng.helper.tidal import (
 from tidal_dl_ng.metadata import Metadata
 from tidal_dl_ng.model.downloader import DownloadSegmentResult
 from tidal_dl_ng.model.gui_data import ProgressBars
+from tidal_dl_ng.playlist_checkpoint import PlaylistCheckpoint
 from tidal_dl_ng.rate_limit import DownloadStopped, RateLimit
 
 
@@ -102,9 +104,13 @@ class Download:
         self.event_abort = event_abort if event_abort is not None else Event()
         self.rate_limit = RateLimit(self.event_abort, self.settings.data)
         self.results_lock = Lock()
+        self.quality_lock = Lock()
+        self.transfer_slots = BoundedSemaphore(4)
         self.counts = dict.fromkeys(("downloaded", "skipped_existing", "rate_limited", "unavailable", "other"), 0)
         self.failures = []
-        self.event_run = event_run
+        self.event_run = event_run if event_run is not None else Event()
+        if event_run is None:
+            self.event_run.set()
 
         if not self.settings.data.path_binary_ffmpeg and (
             self.settings.data.video_convert_mp4 or self.settings.data.extract_flac
@@ -123,6 +129,7 @@ class Download:
         media: Track | Video,
         path_file: pathlib.Path,
         stream_manifest: StreamManifest | None = None,
+        quality_video: QualityVideo | None = None,
     ) -> (bool, pathlib.Path):
         if self.event_abort.is_set():
             return False, path_file
@@ -140,7 +147,7 @@ class Download:
             elif isinstance(media, Video):
                 m3u8_variant: m3u8.M3U8 = m3u8.load(media.get_url())
                 # Find the desired video resolution or the next best one.
-                m3u8_playlist, codecs = self._extract_video_stream(m3u8_variant, int(self.settings.data.quality_video))
+                m3u8_playlist, codecs = self._extract_video_stream(m3u8_variant, int(quality_video if quality_video is not None else self.settings.data.quality_video))
                 # Populate urls.
                 urls = m3u8_playlist.files
         except Exception:
@@ -183,7 +190,7 @@ class Download:
         # TODO: Compute download speed (https://github.com/Textualize/rich/blob/master/examples/downloader.py)
         while not self.event_abort.is_set() and not self.progress.tasks[p_task].finished:
             with futures.ThreadPoolExecutor(
-                max_workers=self.settings.data.downloads_simultaneous_per_track_max
+                max_workers=max(1, min(4, self.settings.data.downloads_simultaneous_per_track_max))
             ) as executor:
                 # Dispatch all download tasks to worker threads
                 l_futures: [futures.Future] = [
@@ -275,27 +282,24 @@ class Download:
         if not self.event_run.is_set():
             self.event_run.wait()
 
-        # Retry download on failed segments, with an exponential delay between retries
-        with requests.Session() as s:
-            retries = Retry(total=5, backoff_factor=1)  # , status_forcelist=[ 502, 503, 504 ])
-
-            s.mount("https://", HTTPAdapter(max_retries=retries))
-
+        with self.transfer_slots:
             try:
-                # Create the request object with stream=True, so the content won't be loaded into memory at once.
-                r = s.get(url, stream=True, timeout=REQUESTS_TIMEOUT_SEC)
-
-                r.raise_for_status()
-
-                # Write the content to disk. If `chunk_size` is set to `None` the whole file will be written at once.
-                with path_segment.open("wb") as f:
-                    for data in r.iter_content(chunk_size=block_size):
-                        f.write(data)
-                        # Advance progress bar.
-                        self.progress.advance(p_task)
-
+                self.rate_limit.wait()
+                with requests.Session() as session:
+                    session.mount("https://", HTTPAdapter(max_retries=Retry(total=2, backoff_factor=1)))
+                    with session.get(url, stream=True, timeout=REQUESTS_TIMEOUT_SEC) as response:
+                        response.raise_for_status()
+                        with path_segment.open("wb") as stream:
+                            for data in response.iter_content(chunk_size=block_size):
+                                if self.event_abort.is_set():
+                                    raise DownloadStopped
+                                stream.write(data)
+                                self.progress.advance(p_task)
                 result = True
-            except Exception:
+            except HTTPError as exc:
+                error = exc
+                self.progress.advance(p_task)
+            except (DownloadStopped, requests.RequestException, OSError):
                 self.progress.advance(p_task)
 
         # To send the progress to the GUI, we need to emit the percentage.
@@ -327,13 +331,14 @@ class Download:
 
         return result
 
-    def _record(self, status, media=None, media_id=None, playlist=None):
+    def _record(self, status, media=None, media_id=None, playlist=None, media_type=None):
         with self.results_lock:
             self.counts[status] += 1
             if status in {"rate_limited", "unavailable", "other"}:
                 artist = getattr(media, "artist", None)
                 self.failures.append({
                     "track_id": str(getattr(media, "id", media_id) or ""),
+                    "media_type": "video" if isinstance(media, Video) or media_type == MediaType.VIDEO else "track" if isinstance(media, Track) or media_type == MediaType.TRACK else None,
                     "title": getattr(media, "name", ""),
                     "artist": getattr(artist, "name", ""),
                     "playlist": playlist,
@@ -381,29 +386,30 @@ class Download:
         quality_audio: Quality | None = None,
         quality_video: QualityVideo | None = None,
         is_parent_album: bool = False,
+        repair: bool = False,
         playlist: str | None = None,
     ) -> tuple[bool, pathlib.Path | str]:
         try:
             self.rate_limit.wait()
             if isinstance(media, Track) and not media.available:
-                self._record("unavailable", media, media_id, playlist)
+                self._record("unavailable", media, media_id, playlist, media_type)
                 return False, ""
             status, path = self._item(
                 file_template, media, media_id, media_type, video_download, download_delay,
-                quality_audio, quality_video, is_parent_album,
+                quality_audio, quality_video, is_parent_album, repair,
             )
         except DownloadStopped:
             if playlist is not None:
                 raise
             return False, ""
         except TooManyRequests:
-            self._record("rate_limited", media, media_id, playlist)
+            self._record("rate_limited", media, media_id, playlist, media_type)
             return False, ""
         except Exception:
             self.fn_logger.exception("Could not download item.")
-            self._record("other", media, media_id, playlist)
+            self._record("other", media, media_id, playlist, media_type)
             return False, ""
-        self._record("downloaded" if status else "skipped_existing" if path else "other", media, media_id, playlist)
+        self._record("downloaded" if status else "skipped_existing" if path else "other", media, media_id, playlist, media_type)
         return status, path
 
     def _item(
@@ -417,6 +423,7 @@ class Download:
         quality_audio: Quality | None = None,
         quality_video: QualityVideo | None = None,
         is_parent_album: bool = False,
+        repair: bool = False,
     ) -> (bool, pathlib.Path):
         try:
             if media_id and media_type:
@@ -464,7 +471,7 @@ class Download:
         # Compute if and how downloads need to be skipped.
         skip_download: bool = False
 
-        if self.skip_existing:
+        if self.skip_existing and not repair:
             skip_file: bool = check_media_exists(path_media_dst)
 
             if self.settings.data.symlink_to_track and not isinstance(media, Video):
@@ -488,26 +495,14 @@ class Download:
 
         result_download = False
         if not skip_file:
-            # If a quality is explicitly set, change it and remember the previously set quality.
-            quality_audio_old: Quality = self.adjust_quality_audio(quality_audio) if quality_audio else quality_audio
-            quality_video_old: QualityVideo = (
-                self.adjust_quality_video(quality_video) if quality_video else quality_video
-            )
             do_flac_extract = False
             # Get extension.
             file_extension: str
             stream_manifest: StreamManifest | None = None
 
             if isinstance(media, Track):
-                try:
-                    media_stream: Stream = self.rate_limit.call(media.get_stream)
-                    stream_manifest = media_stream.get_stream_manifest()
-                except Exception:
-                    if quality_audio:
-                        self.adjust_quality_audio(quality_audio_old)
-                    if quality_video:
-                        self.adjust_quality_video(quality_video_old)
-                    raise
+                media_stream: Stream = self.rate_limit.call(partial(self._track_stream, media, quality_audio))
+                stream_manifest = media_stream.get_stream_manifest()
 
                 file_extension = stream_manifest.file_extension
 
@@ -534,7 +529,7 @@ class Download:
 
                     # Download media.
                     result_download, tmp_path_file = self._download(
-                        media=media, stream_manifest=stream_manifest, path_file=tmp_path_file
+                        media=media, stream_manifest=stream_manifest, path_file=tmp_path_file, quality_video=quality_video
                     )
 
                     if result_download:
@@ -588,13 +583,6 @@ class Download:
             if (skip_download or result_download) and self.settings.data.symlink_to_track and not isinstance(media, Video):
                 path_media_track_dir: pathlib.Path = self.media_move_and_symlink(media, path_media_dst, file_extension)
 
-            if quality_audio:
-                # Set quality back to the global user value
-                self.adjust_quality_audio(quality_audio_old)
-
-            if quality_video:
-                # Set quality back to the global user value
-                self.adjust_quality_video(quality_video_old)
         else:
             self.fn_logger.debug(f"Download skipped, since file exists: '{path_media_dst}'")
 
@@ -648,6 +636,16 @@ class Download:
                 path_media_src.symlink_to(path_media_dst_relative)
 
         return path_media_dst
+
+    def _track_stream(self, media: Track, quality: Quality | None):
+        with self.quality_lock:
+            old_quality = self.session.audio_quality
+            try:
+                if quality is not None:
+                    self.session.audio_quality = quality
+                return media.get_stream()
+            finally:
+                self.session.audio_quality = old_quality
 
     def adjust_quality_audio(self, quality) -> Quality:
         # Save original quality settings
@@ -850,10 +848,19 @@ class Download:
         )
 
         is_album: bool = isinstance(media, Album)
-        result_dirs: [pathlib.Path] = []
+        result_paths = {}
+        quality_audio = quality_audio or self.settings.data.quality_audio
+        quality_video = quality_video if quality_video is not None else self.settings.data.quality_video
+        checkpoint = PlaylistCheckpoint(
+            pathlib.Path(self.path_base).expanduser(),
+            [type(media).__name__, str(media.id), file_name_relative,
+             str(quality_audio or self.settings.data.quality_audio),
+             str(quality_video or self.settings.data.quality_video)],
+            [f"{type(track).__name__}:{track.id}" for track in items],
+        )
 
         completed = self._run_playlist(
-            items, progress, p_task1, result_dirs, progress_stdout,
+            items, progress, p_task1, result_paths, progress_stdout,
             media_options=dict(
                 file_template=file_name_relative,
                 quality_audio=quality_audio,
@@ -862,6 +869,7 @@ class Download:
                 is_parent_album=is_album,
                 playlist=list_media_name,
             ),
+            checkpoint=checkpoint,
         )
         if self.event_abort.is_set():
             return
@@ -874,14 +882,18 @@ class Download:
 
         # Create playlist file
         if self.settings.data.playlist_create:
-            self.playlist_populate(set(result_dirs), list_media_name, is_album)
+            self.playlist_populate([result_paths[index] for index in sorted(result_paths)], list_media_name)
 
         self.fn_logger.info(f"Finished list '{list_media_name}'.")
 
-    def _run_playlist(self, items, progress, task, result_dirs, progress_stdout, media_options):
-        remaining = iter(items)
-        pending = set()
-        completed = 0
+    def _run_playlist(self, items, progress, task, result_paths, progress_stdout, media_options, checkpoint=None):
+        if checkpoint is not None:
+            result_paths.update(checkpoint.completed())
+        repair_positions = checkpoint.recorded_positions() - result_paths.keys() if checkpoint is not None else set()
+        completed = len(result_paths)
+        progress.advance(task, completed)
+        remaining = ((index, track) for index, track in enumerate(items) if index not in result_paths)
+        pending = {}
         workers = max(1, self.settings.data.downloads_concurrent_max)
         with futures.ThreadPoolExecutor(max_workers=workers) as executor:
             while True:
@@ -890,21 +902,26 @@ class Download:
                         future.cancel()
                 else:
                     while len(pending) < workers and not (self.event_abort.is_set() or self.rate_limit.open):
-                        track = next(remaining, None)
-                        if track is None:
+                        entry = next(remaining, None)
+                        if entry is None:
                             break
-                        pending.add(executor.submit(self.item, media=track, **media_options))
+                        index, track = entry
+                        options = {**media_options, "repair": True} if index in repair_positions else media_options
+                        pending[executor.submit(self.item, media=track, **options)] = index
                 if not pending:
                     break
 
-                finished, pending = futures.wait(pending, return_when=futures.FIRST_COMPLETED)
+                finished, _ = futures.wait(pending, return_when=futures.FIRST_COMPLETED)
                 for future in finished:
+                    index = pending.pop(future)
                     try:
                         _, path = future.result()
                     except (DownloadStopped, futures.CancelledError):
                         continue
                     if path:
-                        result_dirs.append(path.parent)
+                        result_paths[index] = path
+                        if checkpoint is not None:
+                            checkpoint.record(index, path)
                     completed += 1
                     progress.advance(task)
                     if not progress_stdout:
@@ -912,40 +929,21 @@ class Download:
 
         return completed
 
-    def playlist_populate(self, dirs_scoped: [pathlib.Path], name_list: str, is_album: bool) -> [pathlib.Path]:
-        result: [pathlib.Path] = []
-
-        # For each dir, which contains tracks
-        for dir_scoped in dirs_scoped:
-            # Sanitize final playlist name to fit into OS boundaries.
-            path_playlist = dir_scoped / sanitize_filename(PLAYLIST_PREFIX + name_list + PLAYLIST_EXTENSION)
-            path_playlist = pathlib.Path(path_file_sanitize(path_playlist, adapt=True))
-
-            self.fn_logger.debug(f"Playlist: Creating {path_playlist}")
-
-            # Get all tracks in the directory
-            path_tracks: [pathlib.Path] = []
-
-            for extension_audio in AudioExtensions:
-                path_tracks = path_tracks + list(dir_scoped.glob(f"*{extension_audio!s}"))
-
-            # If it is not an album sort by modification time
-            if not is_album:
-                path_tracks.sort(key=lambda x: os.path.getmtime(x))
-
-            # Write data to m3u file
-            with path_playlist.open(mode="w", encoding="utf-8") as f:
-                for path_track in path_tracks:
-                    # If it's a symlink write the relative file path to the actual track into the playlist file
-                    if path_track.is_symlink():
-                        media_file_target = path_track.resolve().relative_to(path_track.parent, walk_up=True)
-                    else:
-                        media_file_target = path_track.name
-
-                    f.write(str(media_file_target) + os.linesep)
-
-            result.append(path_playlist)
-
+    def playlist_populate(self, paths: list[pathlib.Path], name_list: str) -> list[pathlib.Path]:
+        by_directory = {}
+        for path in paths:
+            if path.suffix.lower() in {str(extension) for extension in AudioExtensions}:
+                by_directory.setdefault(path.parent, []).append(path)
+        result = []
+        for directory, tracks in by_directory.items():
+            destination = pathlib.Path(path_file_sanitize(
+                directory / sanitize_filename(PLAYLIST_PREFIX + name_list + PLAYLIST_EXTENSION), adapt=True,
+            ))
+            with destination.open("w", encoding="utf-8") as stream:
+                for track in tracks:
+                    target = track.resolve() if track.is_symlink() else track
+                    stream.write(str(target.relative_to(destination.parent, walk_up=True)) + "\n")
+            result.append(destination)
         return result
 
     def _video_convert(self, path_file: pathlib.Path) -> pathlib.Path:
