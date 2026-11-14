@@ -299,6 +299,23 @@ def download(
     return _download(ctx, urls)
 
 
+@app.command(name="verify-files")
+def verify_files():
+    """Check files previously recorded by the playlist checkpoint."""
+    from tidal_dl_ng.playlist_checkpoint import PlaylistCheckpoint
+
+    directory = Path(Settings().data.download_base_path).expanduser()
+    changed = PlaylistCheckpoint.changed_files(directory)
+    if changed is None:
+        typer.echo("No playlist checkpoint exists for this download folder.")
+        return
+    for path in changed:
+        typer.echo(str(path))
+    typer.echo(f"{len(changed)} previously recorded files are missing or changed.")
+    if changed:
+        raise typer.Exit(1)
+
+
 @app.command(name="retry-failed")
 def retry_failed(ctx: typer.Context):
     """Retry standalone track IDs saved in failed_tracks.json."""
