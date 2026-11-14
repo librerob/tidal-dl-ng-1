@@ -1,5 +1,5 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 236" role="img" aria-labelledby="title">
-  <title id="title">TIDAL Downloader NG by librerob</title>
+  <title id="title">TIDAL Downloader NG</title>
   <defs>
     <linearGradient id="background"><stop stop-color="#0C1226"/><stop offset="1" stop-color="#170C25"/></linearGradient>
     <linearGradient id="signal"><stop stop-color="#52F5DA"/><stop offset=".58" stop-color="#8294FF"/><stop offset="1" stop-color="#F392E9"/></linearGradient>
@@ -64,8 +64,7 @@
   <circle cx="92" cy="94" r="4" fill="#f299f5"/>
   </g>
   <g transform="translate(116 0)" font-family="Segoe UI,Arial,sans-serif">
-    <text x="46" y="67" fill="#79ebdf" font-size="19" font-weight="600" letter-spacing="4">LIBREROB</text>
-    <text x="43" y="128" fill="#f5f7ff" font-size="46" font-weight="700" letter-spacing="-1.9">TIDAL Downloader</text>
-    <text x="44" y="183" fill="url(#signal)" font-size="51" font-weight="750" letter-spacing="-1.8">NG</text>
+    <text x="43" y="113" fill="#f5f7ff" font-size="46" font-weight="700" letter-spacing="-1.9">TIDAL Downloader</text>
+    <text x="44" y="168" fill="url(#signal)" font-size="51" font-weight="750" letter-spacing="-1.8">NG</text>
   </g>
 </svg>
