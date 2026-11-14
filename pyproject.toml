@@ -1,12 +1,11 @@
 [project]
 name = "tidal-dl-ng"
 authors = [
-  {name = "Robert Honz",email = "<cen.sored@gmail.com>"}
+  {name = "Robert Honz", email = "cen.sored@gmail.com"},
+  {name = "librerob"}
 ]
 version = "0.24.6"
 description = "TIDAL Medial Downloader Next Generation!"
-repository = "https://github.com/exislow/tidal-dl-ng"
-documentation = "https://exislow.github.io/tidal-dl-ng/"
 readme = "README.md"
 packages = [
   { include = "tidal_dl_ng" }
@@ -20,6 +19,11 @@ classifiers = [
 ]
 requires-python = ">=3.12,<3.13"
 dynamic = ["dependencies"]
+
+[project.urls]
+Homepage = "https://github.com/librerob/tidal-dl-ng-1"
+Repository = "https://github.com/librerob/tidal-dl-ng-1"
+"Upstream documentation" = "https://exislow.github.io/tidal-dl-ng/"
 
 [project.scripts]
 tidal-dl-ng = "tidal_dl_ng.cli:app"
@@ -46,6 +50,7 @@ python-ffmpeg = "^2.0.12"
 pycryptodome = "^3.21.0"
 
 [project.optional-dependencies]
+keyring = ["keyring>=25,<26"]
 gui = ["pyside6==6.8.0.1", "pyqtdarktheme-fork"]
 
 [tool.poetry.group.dev]

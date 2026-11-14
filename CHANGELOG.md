@@ -1,5 +1,14 @@
 # v0.4.11
 
+## Unreleased
+
+- Fixed installed CLI and GUI imports and fork release checks. Pinned the GUI extra and removed unused remote API key loading.
+- Added shared rate-limit backoff, a resumable queue pause, and a failed-track report.
+- Improved GUI shutdown and Windows filename handling. Completed media is now published atomically.
+- Added optional OS keyring storage with migration, dependency checks, and a Windows setup guide.
+- Updated fork metadata and removed PyPI publishing and docs deployment from release CI.
+
+
 - Fixes regarding empty metadata tags (also fixes #1).
 - CLI downloader extended to handle playlists and mixes.
 - `Download.track()` now handles logger functions.
