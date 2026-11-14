@@ -1,4 +1,4 @@
-name: macOS and Linux preview
+name: Cross-platform preview
 
 on:
   workflow_dispatch:
@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  RELEASE_TAG: 0.24.6-preview.1
-  RELEASE_COMMIT: 772eb7a17406b2a92ebd3f13da582c329fb67a6d
+  RELEASE_TAG: 0.24.6-preview.2
+  RELEASE_COMMIT: aac92e77c8965874be129af18d4e8db7653cfb05
 
 jobs:
   package:
@@ -118,9 +118,14 @@ jobs:
           path: release-files/
           if-no-files-found: error
 
+  windows:
+    uses: ./.github/workflows/windows-portable.yml
+    with:
+      source_ref: aac92e77c8965874be129af18d4e8db7653cfb05
+
   publish:
     if: github.ref == 'refs/heads/master'
-    needs: package
+    needs: [package, windows]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -129,14 +134,18 @@ jobs:
         with:
           path: release-files
           merge-multiple: true
-      - name: Attach verified packages to the existing preview
+      - name: Publish verified Windows, macOS and Linux packages
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
           set -euo pipefail
-          tag_sha="$(gh api "repos/$GH_REPO/git/ref/tags/$RELEASE_TAG" --jq '.object.sha')"
-          test "$tag_sha" = "$RELEASE_COMMIT"
           cd release-files
-          sha256sum --check ./*.sha256
-          gh release upload "$RELEASE_TAG" ./*.zip ./*.AppImage ./*.sha256
+          win=tidal-dl-ng-windows-x64.zip
+          expected=$(tr -d '\r\n' < "$win.sha256")
+          printf '%s  %s\n' "${expected,,}" "$win" | sha256sum --check
+          sha256sum --check tidal-dl-ng-macos-*.zip.sha256 tidal-dl-ng-linux-*.AppImage.sha256
+          gh release create "$RELEASE_TAG" --target "$RELEASE_COMMIT" --prerelease \
+            --title "TIDAL Downloader NG 0.24.6 Preview 2" \
+            --notes "Fixes incomplete multi-segment downloads, preserves saved logins during validation failures, and applies a shared cooldown to media-transfer rate limits. Windows x64, macOS Apple Silicon and Intel, and Linux x86-64 packages passed packaged launch tests. SHA-256 files are included. The Windows executable is unsigned and the macOS app is not notarized." \
+            ./*.zip ./*.AppImage ./*.sha256
