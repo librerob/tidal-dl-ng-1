@@ -1,7 +1,11 @@
 import json
 import os
 import shutil
+import subprocess
+import tempfile
 from collections.abc import Callable
+from contextlib import suppress
+from importlib import import_module
 from json import JSONDecodeError
 from pathlib import Path
 from threading import Event
@@ -88,6 +92,10 @@ class Settings(BaseConfig, metaclass=SingletonMeta):
         self.read(self.file_path)
 
 
+KEYRING_SERVICE = "tidal-dl-ng-1"
+KEYRING_ACCOUNT = "tidal-oauth"
+
+
 class Tidal(BaseConfig, metaclass=SingletonMeta):
     session: tidalapi.Session
     token_from_storage: bool = False
@@ -98,14 +106,88 @@ class Tidal(BaseConfig, metaclass=SingletonMeta):
         self.cls_model = ModelToken
         tidal_config: tidalapi.Config = tidalapi.Config(item_limit=10000)
         self.session = tidalapi.Session(tidal_config)
-        # self.session.config.client_id = "km8T1xS355y7dd3H"
-        # self.session.config.client_secret = "vcmeGW1OuZ0fWYMCSZ6vNvSLJlT3XEpW0ambgYt5ZuI="
         self.file_path = path_file_token()
+        self.settings = settings if settings is not None else Settings()
         self.token_from_storage = self.read(self.file_path)
 
         if settings:
             self.settings = settings
             self.settings_apply()
+
+    def _keyring(self):
+        if not self.settings.data.use_keyring:
+            return None
+        try:
+            return import_module("keyring")
+        except ImportError:
+            return None
+
+    def read(self, path: str) -> bool:
+        token_path = Path(path)
+        self.data = ModelToken()
+        backend = self._keyring()
+        if backend is not None:
+            try:
+                stored = backend.get_password(KEYRING_SERVICE, KEYRING_ACCOUNT)
+                if stored and not token_path.exists():
+                    self.data = ModelToken.from_json(stored)
+                    return bool(self.data.access_token)
+            except Exception:  # A local keyring may be unavailable or locked.
+                stored = None
+
+        try:
+            if os.name != "nt":
+                token_path.chmod(0o600)
+            self.data = ModelToken.from_json(token_path.read_text(encoding="utf-8"))
+        except (OSError, TypeError, ValueError):
+            return False
+
+        if not self.data.access_token:
+            return False
+        if backend is not None or os.name == "nt":
+            self.save()
+        return True
+
+    def save(self, config_to_compare: str = None) -> None:
+        token_path = Path(self.file_path)
+        payload = self.data.to_json()
+        backend = self._keyring()
+        if backend is not None:
+            try:
+                backend.set_password(KEYRING_SERVICE, KEYRING_ACCOUNT, payload)
+            except Exception:  # Keep the existing file fallback if the keyring fails.
+                backend = None
+            else:
+                token_path.unlink(missing_ok=True)
+                return
+
+        token_path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(dir=token_path.parent) as directory:
+            temp = Path(directory) / token_path.name
+            descriptor = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+            os.close(descriptor)
+            if os.name == "nt":
+                sid = subprocess.check_output(  # noqa: S603, S607
+                    ["whoami.exe", "/user", "/fo", "csv", "/nh"],
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                ).strip().rsplit(",", 1)[-1].strip('"')
+                subprocess.run(
+                    ["icacls.exe", str(temp), "/inheritance:r", "/grant:r", f"*{sid}:(F)"],  # noqa: S603, S607
+                    check=True,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+            temp.write_text(payload, encoding="utf-8")
+            temp.replace(token_path)
+
+    def _remove_token(self):
+        backend = self._keyring()
+        if backend is not None:
+            with suppress(backend.errors.PasswordDeleteError):
+                backend.delete_password(KEYRING_SERVICE, KEYRING_ACCOUNT)
+        Path(self.file_path).unlink(missing_ok=True)
 
     def settings_apply(self, settings: Settings = None) -> bool:
         if settings:
@@ -132,8 +214,7 @@ class Tidal(BaseConfig, metaclass=SingletonMeta):
             except (HTTPError, JSONDecodeError):
                 result = False
                 # Remove token file. Probably corrupt or invalid.
-                if os.path.exists(self.file_path):
-                    os.remove(self.file_path)
+                self._remove_token()
 
                 print(
                     "Either there is something wrong with your credentials / account or some server problems on TIDALs "
@@ -185,7 +266,7 @@ class Tidal(BaseConfig, metaclass=SingletonMeta):
         return result
 
     def logout(self):
-        Path(self.file_path).unlink(missing_ok=True)
+        self._remove_token()
         self.token_from_storage = False
         del self.session
 

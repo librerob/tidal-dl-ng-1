@@ -68,3 +68,15 @@ jobs:
 
       - name: Check if documentation can be built
         run: poetry run mkdocs build -s
+
+  dependency-audit:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install and audit runtime dependencies
+        run: |
+          python -m pip install ".[gui,keyring]" pip-audit
+          python -m pip_audit

@@ -10,6 +10,7 @@ from tidal_dl_ng.constants import CoverDimensions, QualityVideo
 @dataclass
 class Settings:
     skip_existing: bool = True
+    use_keyring: bool = False
     lyrics_embed: bool = False
     lyrics_file: bool = False
     # TODO: Implement API KEY selection.
@@ -54,6 +55,7 @@ class Settings:
 @dataclass
 class HelpSettings:
     check_for_updates: str = "Check for a new release when the GUI starts."
+    use_keyring: str = "Store TIDAL login credentials in the operating-system keyring when available."
     skip_existing: str = "Skip download if file already exists."
     album_cover_save: str = "Safe cover to album folder."
     lyrics_embed: str = "Embed lyrics in audio file, if lyrics are available."

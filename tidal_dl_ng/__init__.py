@@ -11,6 +11,10 @@ from tidal_dl_ng.constants import REQUESTS_TIMEOUT_SEC
 from tidal_dl_ng.model.meta import ProjectInformation, ReleaseLatest
 
 
+REPOSITORY_URL = "https://github.com/librerob/tidal-dl-ng-1"
+LATEST_RELEASE_URL = "https://api.github.com/repos/librerob/tidal-dl-ng-1/releases/latest"
+
+
 def metadata_project() -> ProjectInformation:
     result: ProjectInformation
     file_path: Path = Path(__file__)
@@ -32,12 +36,12 @@ def metadata_project() -> ProjectInformation:
 
     if tmp_result:
         result = ProjectInformation(
-            version=tmp_result["project"]["version"], repository_url=tmp_result["project"]["repository"]
+            version=tmp_result["project"]["version"], repository_url=tmp_result["project"]["urls"]["Repository"]
         )
     else:
         try:
             meta_info = importlib.metadata.metadata(name_package())
-            result = ProjectInformation(version=meta_info["Version"], repository_url=meta_info.get("Home-page") or "https://github.com/librerob/tidal-dl-ng-1")
+            result = ProjectInformation(version=meta_info["Version"], repository_url=REPOSITORY_URL)
         except:
             result = ProjectInformation(version="0.0.0", repository_url="https://anerroroccur.ed/sorry/for/that")
 
@@ -63,9 +67,6 @@ def repository_path() -> str:
     url_path: str = urlparse(url_repo).path
 
     return url_path
-
-
-LATEST_RELEASE_URL = "https://api.github.com/repos/librerob/tidal-dl-ng-1/releases/latest"
 
 
 def latest_version_information() -> ReleaseLatest | None:

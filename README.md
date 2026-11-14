@@ -40,6 +40,29 @@ If you like this projects and want to support it, feel free to buy me a coffee ð
 <a href="https://www.buymeacoffee.com/exislow" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/arial-orange.png" alt="Buy Me A Coffee" style="height: 51px !important;width: 217px !important;" ></a>
 <a href="https://ko-fi.com/exislow" target="_blank" rel="noopener noreferrer"><img src="https://help.ko-fi.com/hc/article_attachments/11833788361117" alt="61e11d430afb112ea33c3aa5_Button-1-p-500"></a>
 
+
+## Windows quickstart
+
+Install Python 3.12, then run these commands from the checkout in PowerShell.
+
+```powershell
+py -3.12 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install ".[gui]"
+winget install Gyan.FFmpeg
+tdng
+```
+
+If FFmpeg was just installed, open a new terminal and activate the venv again so Windows picks up the updated PATH.
+
+## Troubleshooting
+
+- **TIDAL returns HTTP 429.** The downloader waits before retrying. If the queue pauses, give TIDAL time to recover, then resume it in the GUI or rerun the same CLI command with `skip_existing` enabled.
+- **Some tracks failed.** Look for `failed_tracks.json` in the configured download folder. It records each attempted failure with its track ID, title, artist, playlist, and reason. Use the IDs to re-queue the failed tracks after resolving the error.
+- **Turn off startup update checks.** Clear `check_for_updates` in GUI settings or run `tdn cfg check_for_updates false`.
+- **Use the system keyring.** Install with `pip install ".[gui,keyring]"` and run `tdn cfg use_keyring true`. On the next launch, an existing token moves to the keyring when available.
+
+
 ## ðŸ’» Installation / Upgrade
 
 **Requirements**: Python == 3.12 (other versions might work but are not tested!)
