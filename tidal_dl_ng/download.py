@@ -7,6 +7,7 @@ import tempfile
 from collections.abc import Callable
 from concurrent import futures
 from functools import partial
+from sqlite3 import Error as SQLiteError
 from threading import BoundedSemaphore, Event, Lock
 from uuid import uuid4
 
@@ -164,20 +165,10 @@ class Download:
         # Compute total iterations for progress
         urls_count: int = len(urls)
 
-        if urls_count > 1:
-            progress_total: int = urls_count
-            block_size: int | None = None
-        elif urls_count == 1:
-            try:
-                # Get file size and compute progress steps
-                r = requests.head(urls[0], timeout=REQUESTS_TIMEOUT_SEC)
-                total_size_in_bytes: int = int(r.headers.get("content-length", 0))
-                block_size: int | None = 1048576
-                progress_total: float = total_size_in_bytes / block_size
-            finally:
-                r.close()
-        else:
-            raise ValueError
+        if not urls_count:
+            return False, path_file
+        progress_total = urls_count if urls_count > 1 else None
+        block_size = 1048576 if urls_count == 1 else None
 
         # Create progress Task
         p_task: TaskID = self.progress.add_task(
@@ -186,44 +177,43 @@ class Download:
             visible=progress_to_stdout,
         )
 
-        # Download segments until progress is finished.
-        # TODO: Compute download speed (https://github.com/Textualize/rich/blob/master/examples/downloader.py)
-        while not self.event_abort.is_set() and not self.progress.tasks[p_task].finished:
-            with futures.ThreadPoolExecutor(
-                max_workers=max(1, min(4, self.settings.data.downloads_simultaneous_per_track_max))
-            ) as executor:
-                # Dispatch all download tasks to worker threads
-                l_futures: [futures.Future] = [
-                    executor.submit(self._download_segment, url, path_base, block_size, p_task, progress_to_stdout)
-                    for url in urls
-                ]
+        with futures.ThreadPoolExecutor(
+            max_workers=max(1, min(4, self.settings.data.downloads_simultaneous_per_track_max))
+        ) as executor:
+            # Dispatch all download tasks to worker threads
+            l_futures: [futures.Future] = [
+                executor.submit(self._download_segment, url, path_base, block_size, p_task, progress_to_stdout)
+                for url in urls
+            ]
 
-                # Report results as they become available
-                for future in futures.as_completed(l_futures):
-                    # Retrieve result
-                    result_dl_segment: DownloadSegmentResult = future.result()
+            # Report results as they become available
+            for future in futures.as_completed(l_futures):
+                # Retrieve result
+                result_dl_segment: DownloadSegmentResult = future.result()
 
-                    dl_segment_results.append(result_dl_segment)
+                dl_segment_results.append(result_dl_segment)
 
-                    # check for a link that was skipped
-                    if not result_dl_segment.result and (result_dl_segment.url is not urls[-1]):
-                        # Sometimes it happens, if a track is very short (< 8 seconds or so), that the last URL in `urls` is
-                        # invalid (HTTP Error 500) and not necessary. File won't be corrupt.
-                        # If this is NOT the case, but any other URL has resulted in an error,
-                        # mark the whole thing as corrupt.
-                        result_segments = False
-                        self.fn_logger.error(f"Something went wrong while downloading {media_name}. File is corrupt!")
+                # check for a link that was skipped
+                if not result_dl_segment.result and (urls_count == 1 or result_dl_segment.url != urls[-1]):
+                    # Sometimes it happens, if a track is very short (< 8 seconds or so), that the last URL in `urls` is
+                    # invalid (HTTP Error 500) and not necessary. File won't be corrupt.
+                    # If this is NOT the case, but any other URL has resulted in an error,
+                    # mark the whole thing as corrupt.
+                    result_segments = False
+                    self.fn_logger.error(f"Something went wrong while downloading {media_name}. File is corrupt!")
 
-                    # If app is terminated (CTRL+C)
-                    if self.event_abort.is_set() or self.rate_limit.open:
-                        # Cancel all not yet started tasks
-                        for f in l_futures:
-                            f.cancel()
+                # If app is terminated (CTRL+C)
+                if self.event_abort.is_set() or self.rate_limit.open:
+                    # Cancel all not yet started tasks
+                    for f in l_futures:
+                        f.cancel()
 
-                        return False, path_file
+                    return False, path_file
 
         if self.event_abort.is_set():
             return False, path_file
+        if urls_count == 1 and result_segments:
+            self.progress.update(p_task, total=self.progress.tasks[p_task].completed)
         tmp_path_file_decrypted: pathlib.Path = path_file
 
         # Only if no error happened while downloading.
@@ -851,13 +841,17 @@ class Download:
         result_paths = {}
         quality_audio = quality_audio or self.settings.data.quality_audio
         quality_video = quality_video if quality_video is not None else self.settings.data.quality_video
-        checkpoint = PlaylistCheckpoint(
-            pathlib.Path(self.path_base).expanduser(),
-            [type(media).__name__, str(media.id), file_name_relative,
-             str(quality_audio or self.settings.data.quality_audio),
-             str(quality_video or self.settings.data.quality_video)],
-            [f"{type(track).__name__}:{track.id}" for track in items],
-        )
+        checkpoint = None
+        try:
+            checkpoint = PlaylistCheckpoint(
+                pathlib.Path(self.path_base).expanduser(),
+                [type(media).__name__, str(media.id), file_name_relative,
+                 str(quality_audio or self.settings.data.quality_audio),
+                 str(quality_video or self.settings.data.quality_video)],
+                [f"{type(track).__name__}:{track.id}" for track in items],
+            )
+        except (SQLiteError, OSError):
+            self.fn_logger.warning("Playlist checkpoint unavailable. Continuing without saved progress.")
 
         completed = self._run_playlist(
             items, progress, p_task1, result_paths, progress_stdout,
@@ -887,9 +881,15 @@ class Download:
         self.fn_logger.info(f"Finished list '{list_media_name}'.")
 
     def _run_playlist(self, items, progress, task, result_paths, progress_stdout, media_options, checkpoint=None):
+        repair_positions = set()
         if checkpoint is not None:
-            result_paths.update(checkpoint.completed())
-        repair_positions = checkpoint.recorded_positions() - result_paths.keys() if checkpoint is not None else set()
+            try:
+                saved = checkpoint.completed()
+                repair_positions = checkpoint.recorded_positions() - saved.keys()
+                result_paths.update(saved)
+            except (SQLiteError, OSError):
+                self.fn_logger.warning("Playlist checkpoint unavailable. Continuing without saved progress.")
+                checkpoint = None
         completed = len(result_paths)
         progress.advance(task, completed)
         remaining = ((index, track) for index, track in enumerate(items) if index not in result_paths)
@@ -921,7 +921,11 @@ class Download:
                     if path:
                         result_paths[index] = path
                         if checkpoint is not None:
-                            checkpoint.record(index, path)
+                            try:
+                                checkpoint.record(index, path)
+                            except (SQLiteError, OSError):
+                                self.fn_logger.warning("Could not save playlist progress. Continuing the download.")
+                                checkpoint = None
                     completed += 1
                     progress.advance(task)
                     if not progress_stdout:
