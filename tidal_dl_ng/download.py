@@ -338,6 +338,7 @@ class Download:
                 artist = getattr(media, "artist", None)
                 self.failures.append({
                     "track_id": str(getattr(media, "id", media_id) or ""),
+                    "media_type": "video" if isinstance(media, Video) else "track" if isinstance(media, Track) else None,
                     "title": getattr(media, "name", ""),
                     "artist": getattr(artist, "name", ""),
                     "playlist": playlist,

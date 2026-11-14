@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+import json
 import signal
 from collections.abc import Callable
 from pathlib import Path
@@ -296,6 +297,32 @@ def download(
             raise typer.Abort()
 
     return _download(ctx, urls)
+
+
+@app.command(name="retry-failed")
+def retry_failed(ctx: typer.Context):
+    """Retry standalone track IDs saved in failed_tracks.json."""
+    report = Path(Settings().data.download_base_path).expanduser() / "failed_tracks.json"
+    try:
+        entries = json.loads(report.read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        typer.echo("Could not read failed_tracks.json.", err=True)
+        raise typer.Exit(1) from None
+    if not isinstance(entries, list):
+        typer.echo("Invalid failed_tracks.json.", err=True)
+        raise typer.Exit(1)
+    urls = {}
+    for entry in entries:
+        if not isinstance(entry, dict) or entry.get("reason") == "unavailable" or entry.get("playlist"):
+            continue
+        track_id = str(entry.get("track_id", ""))
+        if track_id.isascii() and track_id.isdecimal() and entry.get("media_type") == "track":
+            urls[f"https://tidal.com/browse/track/{track_id}"] = None
+    if not urls:
+        typer.echo("No retryable standalone tracks. Reopen the original playlist to resume playlist failures.")
+        return
+    if not _download(ctx, list(urls)):
+        raise typer.Exit(1)
 
 
 @dl_fav_group.command(

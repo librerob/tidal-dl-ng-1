@@ -210,3 +210,5 @@ This project is based on:
 ### Playlist recovery
 
 Reopen the same playlist with the same output folder, filename template and quality, then start it again. The app checks its local SQLite checkpoint and skips unchanged files it already recorded. Missing or changed files stay eligible for download. Completed paths are used to write the playlist in TIDAL order. The checkpoint applies to the same ordered playlist snapshot and does not store credentials.
+
+Use `tdn retry-failed` for standalone tracks recorded by this version. Reopen the original playlist to retry its remaining tracks in their original folders.
