@@ -119,6 +119,8 @@ jobs:
           if-no-files-found: error
 
   windows:
+    permissions:
+      contents: read
     uses: ./.github/workflows/windows-portable.yml
     with:
       source_ref: aac92e77c8965874be129af18d4e8db7653cfb05
