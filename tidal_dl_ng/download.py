@@ -331,14 +331,14 @@ class Download:
 
         return result
 
-    def _record(self, status, media=None, media_id=None, playlist=None):
+    def _record(self, status, media=None, media_id=None, playlist=None, media_type=None):
         with self.results_lock:
             self.counts[status] += 1
             if status in {"rate_limited", "unavailable", "other"}:
                 artist = getattr(media, "artist", None)
                 self.failures.append({
                     "track_id": str(getattr(media, "id", media_id) or ""),
-                    "media_type": "video" if isinstance(media, Video) else "track" if isinstance(media, Track) else None,
+                    "media_type": "video" if isinstance(media, Video) or media_type == MediaType.VIDEO else "track" if isinstance(media, Track) or media_type == MediaType.TRACK else None,
                     "title": getattr(media, "name", ""),
                     "artist": getattr(artist, "name", ""),
                     "playlist": playlist,
@@ -391,7 +391,7 @@ class Download:
         try:
             self.rate_limit.wait()
             if isinstance(media, Track) and not media.available:
-                self._record("unavailable", media, media_id, playlist)
+                self._record("unavailable", media, media_id, playlist, media_type)
                 return False, ""
             status, path = self._item(
                 file_template, media, media_id, media_type, video_download, download_delay,
@@ -402,13 +402,13 @@ class Download:
                 raise
             return False, ""
         except TooManyRequests:
-            self._record("rate_limited", media, media_id, playlist)
+            self._record("rate_limited", media, media_id, playlist, media_type)
             return False, ""
         except Exception:
             self.fn_logger.exception("Could not download item.")
-            self._record("other", media, media_id, playlist)
+            self._record("other", media, media_id, playlist, media_type)
             return False, ""
-        self._record("downloaded" if status else "skipped_existing" if path else "other", media, media_id, playlist)
+        self._record("downloaded" if status else "skipped_existing" if path else "other", media, media_id, playlist, media_type)
         return status, path
 
     def _item(
