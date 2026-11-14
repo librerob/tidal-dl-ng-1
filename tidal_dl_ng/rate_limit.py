@@ -54,6 +54,14 @@ class RateLimit:
                 return
             self.abort.wait(min(remaining, 0.25))
 
+    def record_limit(self, error, attempt=0):
+        delay = max(retry_after(error), 2 ** min(attempt, 6) + random.SystemRandom().uniform(0, 1))
+        with self.lock:
+            self.until = max(self.until, time.monotonic() + delay)
+            self.failures += 1
+            if self.failures >= max(1, self.settings.rate_limit_breaker_threshold):
+                self.open = True
+
     def call(self, operation):
         attempts = max(1, self.settings.rate_limit_attempts)
         for attempt in range(attempts):
@@ -61,12 +69,7 @@ class RateLimit:
             try:
                 result = operation()
             except TooManyRequests as error:
-                delay = max(retry_after(error), 2 ** min(attempt, 6) + random.SystemRandom().uniform(0, 1))
-                with self.lock:
-                    self.until = max(self.until, time.monotonic() + delay)
-                    self.failures += 1
-                    if self.failures >= max(1, self.settings.rate_limit_breaker_threshold):
-                        self.open = True
+                self.record_limit(error, attempt)
                 if self.open or attempt + 1 == attempts:
                     raise
             else:

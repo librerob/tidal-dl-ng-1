@@ -193,14 +193,16 @@ class Download:
 
                 dl_segment_results.append(result_dl_segment)
 
-                # check for a link that was skipped
-                if not result_dl_segment.result and (urls_count == 1 or result_dl_segment.url != urls[-1]):
-                    # Sometimes it happens, if a track is very short (< 8 seconds or so), that the last URL in `urls` is
-                    # invalid (HTTP Error 500) and not necessary. File won't be corrupt.
-                    # If this is NOT the case, but any other URL has resulted in an error,
-                    # mark the whole thing as corrupt.
+                if not result_dl_segment.result:
                     result_segments = False
-                    self.fn_logger.error(f"Something went wrong while downloading {media_name}. File is corrupt!")
+                    error = result_dl_segment.error
+                    if error is not None and error.response is not None and error.response.status_code == 429:
+                        for pending in l_futures:
+                            pending.cancel()
+                        limited = TooManyRequests("Media transfer rate limited")
+                        limited.response = error.response
+                        raise limited from error
+                    self.fn_logger.error(f"Could not download all segments for {media_name}.")
 
                 # If app is terminated (CTRL+C)
                 if self.event_abort.is_set() or self.rate_limit.open:
@@ -232,8 +234,6 @@ class Download:
         return result_merge, tmp_path_file_decrypted
 
     def _segments_merge(self, path_file, dl_segment_results) -> bool:
-        result: bool = True
-
         # Copy the content of all segments into one file.
         try:
             with path_file.open("wb") as f_target:
@@ -246,11 +246,10 @@ class Download:
                     # Delete segment from HDD
                     dl_segment_result.path_segment.unlink()
 
-        except Exception:
-            if dl_segment_result is not dl_segment_results[-1]:
-                result = False
+        except OSError:
+            return False
 
-        return result
+        return True
 
     def _download_segment(
         self, url: str, path_base: pathlib.Path, block_size: int | None, p_task: TaskID, progress_to_stdout: bool
@@ -276,7 +275,10 @@ class Download:
             try:
                 self.rate_limit.wait()
                 with requests.Session() as session:
-                    session.mount("https://", HTTPAdapter(max_retries=Retry(total=2, backoff_factor=1)))
+                    session.mount(
+                        "https://",
+                        HTTPAdapter(max_retries=Retry(total=2, backoff_factor=1, respect_retry_after_header=False)),
+                    )
                     with session.get(url, stream=True, timeout=REQUESTS_TIMEOUT_SEC) as response:
                         response.raise_for_status()
                         with path_segment.open("wb") as stream:
@@ -288,6 +290,8 @@ class Download:
                 result = True
             except HTTPError as exc:
                 error = exc
+                if exc.response is not None and exc.response.status_code == 429:
+                    self.rate_limit.record_limit(exc)
                 self.progress.advance(p_task)
             except (DownloadStopped, requests.RequestException, OSError):
                 self.progress.advance(p_task)
