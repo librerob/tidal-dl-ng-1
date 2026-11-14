@@ -8,6 +8,8 @@ from PySide6 import QtCore
 class XStream(QtCore.QObject):
     _stdout = None
     _stderr = None
+    _original_stdout = None
+    _original_stderr = None
     messageWritten = QtCore.Signal(str)
 
     def flush(self):
@@ -24,6 +26,7 @@ class XStream(QtCore.QObject):
     def stdout():
         if not XStream._stdout:
             XStream._stdout = XStream()
+            XStream._original_stdout = sys.stdout
             sys.stdout = XStream._stdout
         return XStream._stdout
 
@@ -31,8 +34,19 @@ class XStream(QtCore.QObject):
     def stderr():
         if not XStream._stderr:
             XStream._stderr = XStream()
+            XStream._original_stderr = sys.stderr
             sys.stderr = XStream._stderr
         return XStream._stderr
+
+
+    @staticmethod
+    def restore():
+        if XStream._stdout is not None and sys.stdout is XStream._stdout:
+            sys.stdout = XStream._original_stdout
+        if XStream._stderr is not None and sys.stderr is XStream._stderr:
+            sys.stderr = XStream._original_stderr
+        XStream._stdout = None
+        XStream._stderr = None
 
 
 class QtHandler(logging.Handler):
