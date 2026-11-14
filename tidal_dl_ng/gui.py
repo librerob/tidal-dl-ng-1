@@ -1210,7 +1210,11 @@ def gui_activate(tidal: Tidal | None = None):
     qdarktheme.setup_theme(additional_qss="QToolTip { border: 0px; }")
 
     # Create icon object and apply it to app window.
-    pixmap: QtGui.QPixmap = QtGui.QPixmap(str(Path(__file__).resolve().parent / "ui" / "icon.png"))
+    if "__compiled__" in globals():
+        icon_path = Path(sys.executable).resolve().parent / "tidal_dl_ng" / "ui" / "icon.png"
+    else:
+        icon_path = Path(__file__).resolve().parent / "ui" / "icon.png"
+    pixmap: QtGui.QPixmap = QtGui.QPixmap(str(icon_path))
     icon: QtGui.QIcon = QtGui.QIcon(pixmap)
 
     app.setWindowIcon(icon)
