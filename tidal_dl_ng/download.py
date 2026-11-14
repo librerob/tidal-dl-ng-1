@@ -4,7 +4,6 @@ import pathlib
 import random
 import shutil
 import tempfile
-import time
 from collections.abc import Callable
 from concurrent import futures
 from threading import Event, Lock
@@ -34,7 +33,7 @@ from tidal_dl_ng.constants import (
 from tidal_dl_ng.helper.decryption import decrypt_file, decrypt_security_token
 from tidal_dl_ng.helper.exceptions import MediaMissing
 from tidal_dl_ng.helper.path import (
-    check_file_exists,
+    check_media_exists,
     format_path_media,
     path_file_sanitize,
     sanitize_filename,
@@ -125,6 +124,8 @@ class Download:
         path_file: pathlib.Path,
         stream_manifest: StreamManifest | None = None,
     ) -> (bool, pathlib.Path):
+        if self.event_abort.is_set():
+            return False, path_file
         media_name: str = name_builder_item(media)
         urls: [str]
         path_base: pathlib.Path = path_file.parent
@@ -180,7 +181,7 @@ class Download:
 
         # Download segments until progress is finished.
         # TODO: Compute download speed (https://github.com/Textualize/rich/blob/master/examples/downloader.py)
-        while not self.progress.tasks[p_task].finished:
+        while not self.event_abort.is_set() and not self.progress.tasks[p_task].finished:
             with futures.ThreadPoolExecutor(
                 max_workers=self.settings.data.downloads_simultaneous_per_track_max
             ) as executor:
@@ -214,6 +215,8 @@ class Download:
 
                         return False, path_file
 
+        if self.event_abort.is_set():
+            return False, path_file
         tmp_path_file_decrypted: pathlib.Path = path_file
 
         # Only if no error happened while downloading.
@@ -460,7 +463,7 @@ class Download:
         skip_download: bool = False
 
         if self.skip_existing:
-            skip_file: bool = check_file_exists(path_media_dst, extension_ignore=False)
+            skip_file: bool = check_media_exists(path_media_dst)
 
             if self.settings.data.symlink_to_track and not isinstance(media, Video):
                 # Compute symlink tracks path, sanitize and check if file exists
@@ -469,7 +472,7 @@ class Download:
                     pathlib.Path(self.path_base).expanduser() / (file_name_track_dir_relative + file_extension_dummy)
                 ).absolute()
                 path_media_track_dir = pathlib.Path(path_file_sanitize(path_media_track_dir, adapt=True))
-                file_exists_track_dir: bool = check_file_exists(path_media_track_dir, extension_ignore=False)
+                file_exists_track_dir: bool = check_media_exists(path_media_track_dir)
                 file_exists_playlist_dir: bool = (
                     not file_exists_track_dir and skip_file and not path_media_dst.is_symlink()
                 )
@@ -561,10 +564,23 @@ class Download:
                         if self.settings.data.cover_album_file and tmp_path_cover:
                             self._move_cover(tmp_path_cover, path_media_dst)
 
-                        self.fn_logger.info(f"Downloaded item '{name_builder_item(media)}'.")
-
                         # Move final file to the configured destination directory.
-                        shutil.move(tmp_path_file, path_media_dst)
+                        if self.event_abort.is_set() or tmp_path_file.stat().st_size == 0:
+                            result_download = False
+                        else:
+                            with tempfile.NamedTemporaryFile(
+                                prefix=".tdn-", suffix=".part", dir=path_media_dst.parent, delete=False
+                            ) as staging_file:
+                                staging_path = pathlib.Path(staging_file.name)
+                            try:
+                                shutil.copyfile(tmp_path_file, staging_path)
+                                if self.event_abort.is_set():
+                                    result_download = False
+                                else:
+                                    staging_path.replace(path_media_dst)
+                                    self.fn_logger.info(f"Downloaded item '{name_builder_item(media)}'.")
+                            finally:
+                                staging_path.unlink(missing_ok=True)
 
             # If files needs to be symlinked, do postprocessing here.
             if (skip_download or result_download) and self.settings.data.symlink_to_track and not isinstance(media, Video):
@@ -593,7 +609,7 @@ class Download:
             )
 
             self.fn_logger.debug(f"Next download will start in {time_sleep} seconds.")
-            time.sleep(time_sleep)
+            self.event_abort.wait(time_sleep)
 
         return status_download, path_media_dst if skip_file or skip_download or result_download else ""
 
@@ -612,7 +628,7 @@ class Download:
         # Move item and symlink it
         if path_media_dst != path_media_src:
             if self.skip_existing:
-                skip_file: bool = check_file_exists(path_media_dst, extension_ignore=False)
+                skip_file: bool = check_media_exists(path_media_dst)
                 skip_symlink: bool = path_media_src.is_symlink()
             else:
                 skip_file: bool = False

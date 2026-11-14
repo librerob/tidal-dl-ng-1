@@ -96,7 +96,7 @@ from tidalapi.session import SearchTypes
 from tidal_dl_ng.config import HandlingApp, Settings, Tidal
 from tidal_dl_ng.constants import FAVORITES, QualityVideo, QueueDownloadStatus, TidalLists
 from tidal_dl_ng.download import Download
-from tidal_dl_ng.logger import XStream, logger_gui
+from tidal_dl_ng.logger import XStream, handler_qt, logger_gui
 from tidal_dl_ng.model.gui_data import ProgressBars, QueueDownloadItem, ResultItem, StatusbarMessage
 from tidal_dl_ng.model.meta import ReleaseLatest
 from tidal_dl_ng.ui.main import Ui_MainWindow
@@ -905,6 +905,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.populate_tree_results(result, parent=parent)
 
     def thread_it(self, fn: Callable, *args, **kwargs):
+        if self.shutdown:
+            return
         # Any other args, kwargs are passed to the run function
         worker = Worker(fn, *args, **kwargs)
 
@@ -1171,7 +1173,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
 
         handling_app: HandlingApp = HandlingApp()
         handling_app.event_abort.set()
-
+        handling_app.event_run.set()
+        self.threadpool.clear()
+        self.threadpool.waitForDone()
+        logger_gui.removeHandler(handler_qt)
+        XStream.restore()
         event.accept()
 
 
@@ -1209,7 +1215,10 @@ def gui_activate(tidal: Tidal | None = None):
     # Check for updates
     window.s_update_check.emit(True)
 
-    sys.exit(app.exec())
+    status = app.exec()
+    if not window.shutdown:
+        window.close()
+    sys.exit(status)
 
 
 if __name__ == "__main__":

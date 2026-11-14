@@ -6,6 +6,7 @@ import re
 import sys
 from collections.abc import Generator
 from copy import deepcopy
+from hashlib import blake2s
 from pathlib import Path
 from typing import Any
 from urllib.parse import unquote, urlsplit
@@ -16,7 +17,7 @@ from tidalapi import Album, Mix, Playlist, Track, UserPlaylist, Video
 from tidalapi.media import AudioExtensions
 
 from tidal_dl_ng import __name_display__
-from tidal_dl_ng.constants import FILENAME_LENGTH_MAX, FILENAME_SANITIZE_PLACEHOLDER, UNIQUIFY_THRESHOLD, MediaType
+from tidal_dl_ng.constants import UNIQUIFY_THRESHOLD, MediaType
 from tidal_dl_ng.helper.tidal import name_builder_album_artist, name_builder_artist, name_builder_title
 
 
@@ -212,6 +213,10 @@ def path_file_sanitize(path_file: pathlib.Path, adapt: bool = False, uniquify: b
     file_stem = path_file.stem  # Filename without extension
     file_ext = path_file.suffix  # Keep the correct extension (.m4a, .flac)
 
+    # Leave space for sidecar extensions and the Windows terminating NUL.
+    if os.name == "nt":
+        file_stem = truncate_windows_stem(path_parent, file_stem, file_ext)
+
     # Sanitize the filename (excluding the extension)
     sanitized_filename = sanitize_filename(file_stem, replacement_text=" ", validate_after_sanitize=True, platform="auto")
 
@@ -221,13 +226,27 @@ def path_file_sanitize(path_file: pathlib.Path, adapt: bool = False, uniquify: b
     # Ensure full path sanitization
     try:
         sanitized_path = sanitize_filepath(sanitized_path, replacement_text=" ", validate_after_sanitize=True, platform="auto")
-    except ValidationError as e:
+    except ValidationError:
         if adapt:
             sanitized_path = pathlib.Path.home() / sanitized_path.name  # Fallback to home directory
         else:
             raise
 
     return sanitized_path
+
+
+def truncate_windows_stem(parent: pathlib.Path, stem: str, extension: str) -> str:
+    parent_length = len(str(parent).encode("utf-16-le")) // 2
+    budget = min(255, 259 - parent_length - 1) - max(5, len(extension))
+    encoded = stem.encode("utf-16-le")
+    if len(encoded) <= budget * 2:
+        return stem
+    suffix = "-" + blake2s(encoded, digest_size=6).hexdigest()
+    if budget <= len(suffix):
+        msg = "Download directory is too long for a Windows filename."
+        raise ValueError(msg)
+    prefix = encoded[: (budget - len(suffix)) * 2].decode("utf-16-le", errors="ignore")
+    return prefix.rstrip(" .") + suffix
 
 
 def file_unique_suffix(path_file: pathlib.Path, seperator: str = "_") -> str:
@@ -255,9 +274,14 @@ def check_file_exists(path_file: pathlib.Path, extension_ignore: bool = False) -
     else:
         path_files: [str] = [path_file]
 
-    result = bool(sum([[True] if os.path.isfile(_file) else [] for _file in path_files], []))
+    return any(os.path.isfile(file) for file in path_files)
 
-    return result
+
+def check_media_exists(path_file: pathlib.Path) -> bool:
+    try:
+        return path_file.is_file() and path_file.stat().st_size > 0
+    except OSError:
+        return False
 
 
 def resource_path(relative_path):
