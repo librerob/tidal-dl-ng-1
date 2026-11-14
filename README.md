@@ -1,11 +1,19 @@
-# TIDAL Downloader NG
+<div align="center">
+  <img src="assets/readme-banner.svg" width="100%" alt="TIDAL Downloader NG by librerob">
 
-[![Release](https://img.shields.io/github/v/release/librerob/tidal-dl-ng-1?include_prereleases)](https://github.com/librerob/tidal-dl-ng-1/releases)
-[![License](https://img.shields.io/github/license/librerob/tidal-dl-ng-1)](LICENSE)
+  <p>Download TIDAL tracks, albums, playlists, and videos from the desktop app or CLI.</p>
 
-A desktop app and command-line tool for downloading tracks, albums, playlists, and videos from TIDAL. A paid TIDAL plan is required. Available audio quality depends on the track and your account.
+  <p>
+    <a href="https://github.com/librerob/tidal-dl-ng-1/releases/download/0.24.6-preview.1/tidal-dl-ng-windows-x64.zip"><img src="https://img.shields.io/badge/Download-Windows_x64-63EAD8?style=for-the-badge&amp;labelColor=141A32" alt="Download for Windows x64"></a>
+    <a href="https://github.com/librerob/tidal-dl-ng-1/releases/tag/0.24.6-preview.1"><img src="https://img.shields.io/badge/Release-0.24.6_preview.1-B2A1FF?style=for-the-badge&amp;labelColor=141A32" alt="Release 0.24.6 preview 1"></a>
+  </p>
 
-![TIDAL Downloader NG](assets/app.png)
+  <p><a href="#features">Features</a> · <a href="#install-from-source">Source install</a> · <a href="#recovery-and-settings">Recovery and settings</a></p>
+
+  <img src="assets/app.png" width="860" alt="TIDAL Downloader NG desktop app">
+</div>
+
+A paid TIDAL plan is required. Available audio quality depends on the track and your account.
 
 ## Windows download
 
@@ -18,13 +26,13 @@ FFmpeg is optional. Install it separately for video conversion or FLAC extractio
 
 ## Features
 
-- Download tracks, albums, playlists, mixes, videos, and favorites with selectable audio and video quality.
-- Save track tags, lyrics, and cover art where available. Choose filename templates and optionally link shared tracks across playlists.
-- Generate M3U8 playlists in the original track order.
-- Retry after TIDAL rate limits and pause the queue when those limits persist.
-- Resume the same playlist from a local checkpoint. Existing non-empty files, including retagged files, are preserved.
-- Report failed tracks, retry eligible standalone failures, and check recorded files for changes.
-- Store login credentials in the system keyring when enabled.
+| Feature | What you can do |
+| --- | --- |
+| **Media and quality** | Download tracks, albums, playlists, mixes, videos, and favorites. Choose the audio or video quality. |
+| **Library organization** | Save tags, lyrics, and cover art where available. Choose filename templates, generate M3U8 playlists in source order, and optionally link shared tracks across playlists. |
+| **Queue recovery** | Wait and retry after a rate limit, or resume the same playlist from a local checkpoint. Existing non-empty files, including retagged files, are preserved. |
+| **File checks** | Report failures, retry eligible standalone tracks, and check previously recorded files for changes. |
+| **Login storage** | Save credentials in the system keyring when enabled. |
 
 ## Install from source
 
