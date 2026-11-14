@@ -41,7 +41,9 @@ jobs:
           $python = "${{ runner.temp }}/tdn-check/Scripts/python.exe"
           & $python -m pip install "nuitka==2.5.9"
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          & $python -m nuitka --msvc=latest "--output-filename=TIDAL Downloader.exe" --include-package=keyring tidal_dl_ng/gui.py
+          $version = & $python -c "from importlib.metadata import version; print(version('tidal-dl-ng'))"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & $python -m nuitka --msvc=latest "--file-version=$version" "--product-version=$version" "--output-filename=TIDAL Downloader.exe" --include-package=keyring tidal_dl_ng/gui.py
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
           Copy-Item LICENSE dist/gui.dist/
           Compress-Archive -Path dist/gui.dist/* -DestinationPath dist/tidal-dl-ng-windows-x64.zip

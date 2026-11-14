@@ -32,7 +32,7 @@ tdn = "tidal_dl_ng.cli:app"
 tdng = "tidal_dl_ng.gui:gui_activate"
 
 [tool.poetry.dependencies]
-requests = "~2.32.3"
+requests = ">=2.33,<3"
 packaging = ">=24"
 mutagen = "^1.47.0"
 dataclasses-json = "^0.6.7"
