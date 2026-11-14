@@ -5,6 +5,7 @@ from urllib.parse import urlparse
 
 import requests
 import toml
+from packaging.version import InvalidVersion, Version
 
 from tidal_dl_ng.constants import REQUESTS_TIMEOUT_SEC
 from tidal_dl_ng.model.meta import ProjectInformation, ReleaseLatest
@@ -36,7 +37,7 @@ def metadata_project() -> ProjectInformation:
     else:
         try:
             meta_info = importlib.metadata.metadata(name_package())
-            result = ProjectInformation(version=meta_info["Version"], repository_url=meta_info["Home-page"])
+            result = ProjectInformation(version=meta_info["Version"], repository_url=meta_info.get("Home-page") or "https://github.com/librerob/tidal-dl-ng-1")
         except:
             result = ProjectInformation(version="0.0.0", repository_url="https://anerroroccur.ed/sorry/for/that")
 
@@ -64,26 +65,25 @@ def repository_path() -> str:
     return url_path
 
 
-def latest_version_information() -> ReleaseLatest:
-    release_info: ReleaseLatest
-    repo_path: str = repository_path()
-    url: str = f"https://api.github.com/repos{repo_path}/releases/latest"
+LATEST_RELEASE_URL = "https://api.github.com/repos/librerob/tidal-dl-ng-1/releases/latest"
 
+
+def latest_version_information() -> ReleaseLatest | None:
     try:
-        response = requests.get(url, timeout=REQUESTS_TIMEOUT_SEC)
-        release_info: str = response.json()
+        response = requests.get(LATEST_RELEASE_URL, timeout=REQUESTS_TIMEOUT_SEC)
+        response.raise_for_status()
+        data = response.json()
+        tag, url, body = data["tag_name"], data["html_url"], data["body"]
+        if not isinstance(tag, str) or Version(tag) == Version("0"):
+            return None
+        if not isinstance(url, str) or urlparse(url).scheme != "https" or urlparse(url).netloc != "github.com":
+            return None
+        if body is not None and not isinstance(body, str):
+            return None
+    except (requests.RequestException, ValueError, TypeError, KeyError):
+        return None
 
-        release_info = ReleaseLatest(
-            version=release_info["tag_name"], url=release_info["html_url"], release_info=release_info["body"]
-        )
-    except:
-        release_info = ReleaseLatest(
-            version="v0.0.0",
-            url=url,
-            release_info=f"Something went wrong calling {url}. Check your internet connection.",
-        )
-
-    return release_info
+    return ReleaseLatest(version=tag, url=url, release_info=body or "")
 
 
 def name_package() -> str:
@@ -123,12 +123,13 @@ __name_display__ = name_app()
 __version__ = version_app()
 
 
-def update_available() -> (bool, ReleaseLatest):
-    latest_info: ReleaseLatest = latest_version_information()
-    result: bool = False
-    version_current: str = "v" + __version__
+def update_available() -> tuple[bool, ReleaseLatest | None]:
+    try:
+        current = Version(__version__)
+    except (InvalidVersion, TypeError):
+        return False, None
+    if current == Version("0"):
+        return False, None
 
-    if version_current != latest_info.version and version_current != "v0.0.0":
-        result = True
-
-    return result, latest_info
+    latest = latest_version_information()
+    return latest is not None and Version(latest.version) > current, latest

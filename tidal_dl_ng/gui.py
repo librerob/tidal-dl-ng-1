@@ -49,7 +49,6 @@ import sys
 import time
 from collections.abc import Callable, Sequence
 
-from config import HandlingApp
 from requests.exceptions import HTTPError
 from tidalapi.session import LinkLogin
 
@@ -94,7 +93,7 @@ from tidalapi import Album, Mix, Playlist, Quality, Track, UserPlaylist, Video
 from tidalapi.artist import Artist
 from tidalapi.session import SearchTypes
 
-from tidal_dl_ng.config import Settings, Tidal
+from tidal_dl_ng.config import HandlingApp, Settings, Tidal
 from tidal_dl_ng.constants import FAVORITES, QualityVideo, QueueDownloadStatus, TidalLists
 from tidal_dl_ng.download import Download
 from tidal_dl_ng.logger import XStream, logger_gui
@@ -392,9 +391,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         tree.customContextMenuRequested.connect(self.menu_context_tree_lists)
 
     def on_update_check(self, on_startup: bool = True):
-        is_available, info = update_available()
+        if on_startup and not self.settings.data.check_for_updates:
+            return
 
-        if (on_startup and is_available) or not on_startup:
+        is_available, info = update_available()
+        if info is not None and (is_available or not on_startup):
             self.s_update_show.emit(True, is_available, info)
 
     def apply_settings(self, settings: Settings):

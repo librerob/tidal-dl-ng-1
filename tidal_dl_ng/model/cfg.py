@@ -45,11 +45,13 @@ class Settings:
     symlink_to_track: bool = False
     playlist_create: bool = False
     metadata_replay_gain: bool = True
+    check_for_updates: bool = True
 
 
 @dataclass_json
 @dataclass
 class HelpSettings:
+    check_for_updates: str = "Check for a new release when the GUI starts."
     skip_existing: str = "Skip download if file already exists."
     album_cover_save: str = "Safe cover to album folder."
     lyrics_embed: str = "Embed lyrics in audio file, if lyrics are available."

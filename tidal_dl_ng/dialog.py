@@ -47,22 +47,16 @@ class DialogVersion(QtWidgets.QDialog):
         self.exec()
 
     def update_info(self, update_available: bool, update_info: ReleaseLatest):
-        if not update_available and update_info.version == "v0.0.0":
-            self.update_info_hide()
-            self.ui.l_error_details.setText(
-                "Cannot retrieve update information. Maybe something is wrong with your internet connection."
-            )
+        self.error_hide()
+
+        if not update_available:
+            self.ui.l_h_version_new.setText("Latest available version:")
+            self.changelog_hide()
         else:
-            self.error_hide()
+            self.ui.l_changelog_details.setText(update_info.release_info)
+            self.ui.pb_download.clicked.connect(lambda: webbrowser.open(update_info.url))
 
-            if not update_available:
-                self.ui.l_h_version_new.setText("Latest available version:")
-                self.changelog_hide()
-            else:
-                self.ui.l_changelog_details.setText(update_info.release_info)
-                self.ui.pb_download.clicked.connect(lambda: webbrowser.open(update_info.url))
-
-            self.ui.l_version_new.setText(update_info.version)
+        self.ui.l_version_new.setText(update_info.version)
 
     def error_hide(self):
         self.ui.l_error.setHidden(True)
@@ -172,7 +166,10 @@ class DialogPreferences(QtWidgets.QDialog):
         ]
 
     def _init_checkboxes(self):
+        self.ui.cb_check_for_updates = QtWidgets.QCheckBox(self.ui.gb_flags)
+        self.ui.lv_flags.addWidget(self.ui.cb_check_for_updates)
         self.parameters_checkboxes = [
+            "check_for_updates",
             "lyrics_embed",
             "lyrics_file",
             "video_download",
