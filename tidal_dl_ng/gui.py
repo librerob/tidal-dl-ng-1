@@ -108,7 +108,7 @@ from tidal_dl_ng.worker import Worker
 class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     settings: Settings
     tidal: Tidal
-    dl: Download
+    dl: Download | None = None
     threadpool: QtCore.QThreadPool
     tray: QtWidgets.QSystemTrayIcon
     spinner: QtWaitingSpinner
@@ -130,6 +130,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     s_tr_results_add_top_level_item: QtCore.Signal = QtCore.Signal(object)
     s_settings_save: QtCore.Signal = QtCore.Signal()
     s_pb_reload_status: QtCore.Signal = QtCore.Signal(bool)
+    s_queue_download_item_waiting = QtCore.Signal(object)
     s_update_check: QtCore.Signal = QtCore.Signal(bool)
     s_update_show: QtCore.Signal = QtCore.Signal(bool, bool, object)
     s_queue_download_item_downloading: QtCore.Signal = QtCore.Signal(object)
@@ -779,6 +780,7 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.s_tr_results_add_top_level_item.connect(self.on_tr_results_add_top_level_item)
         self.s_settings_save.connect(self.on_settings_save)
         self.s_pb_reload_status.connect(self.button_reload_status)
+        self.s_queue_download_item_waiting.connect(self.on_rate_limit_pause)
         self.s_update_check.connect(lambda: self.thread_it(self.on_update_check))
         self.s_update_show.connect(self.on_version)
 
@@ -954,6 +956,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def pb_queue_download_run(self):
         handling_app: HandlingApp = HandlingApp()
 
+        if self.dl is not None:
+            self.dl.rate_limit.resume()
         handling_app.event_run.set()
 
         icon = QtGui.QIcon(QtGui.QIcon.fromTheme(QtGui.QIcon.ThemeIcon.MediaPlaybackStart))
@@ -1001,6 +1005,9 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         handling_app: HandlingApp = HandlingApp()
 
         while not handling_app.event_abort.is_set():
+            if not handling_app.event_run.wait(timeout=0.25) or self.dl is None or self.dl.rate_limit.open:
+                handling_app.event_abort.wait(0.25)
+                continue
             items: [QtWidgets.QTreeWidgetItem | None] = self.tr_queue_download.findItems(
                 QueueDownloadStatus.Waiting, QtCore.Qt.MatchFlag.MatchExactly, column=0
             )
@@ -1016,15 +1023,26 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                     self.s_queue_download_item_downloading.emit(item)
                     result = self.on_queue_download(media, quality_audio=quality_audio, quality_video=quality_video)
 
-                    if result == QueueDownloadStatus.Finished:
+                    self.dl.report()
+                    if self.dl.rate_limit.open:
+                        handling_app.event_run.clear()
+                        logger_gui.warning("TIDAL rate limit reached. Queue paused. Press Resume to retry.")
+                        self.s_queue_download_item_waiting.emit(item)
+                    elif result == QueueDownloadStatus.Finished:
                         self.s_queue_download_item_finished.emit(item)
                     elif result == QueueDownloadStatus.Skipped:
                         self.s_queue_download_item_skipped.emit(item)
+                    else:
+                        self.s_queue_download_item_failed.emit(item)
                 except Exception as e:
                     logger_gui.error(e)
                     self.s_queue_download_item_failed.emit(item)
             else:
                 time.sleep(2)
+
+    def on_rate_limit_pause(self, item):
+        self.pb_queue_download_pause()
+        self.queue_download_item_status(item, QueueDownloadStatus.Waiting)
 
     def on_queue_download_item_downloading(self, item: QtWidgets.QTreeWidgetItem) -> None:
         self.queue_download_item_status(item, QueueDownloadStatus.Downloading)
@@ -1065,6 +1083,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
                 quality_audio=quality_audio,
                 quality_video=quality_video,
             )
+            if self.dl.rate_limit.open:
+                break
 
         return result
 
