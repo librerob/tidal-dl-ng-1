@@ -25,14 +25,14 @@ class PlaylistCheckpoint:
     def completed(self) -> dict[int, Path]:
         with closing(sqlite3.connect(self.database)) as db:
             entries = db.execute(
-                "SELECT position, path, size, mtime FROM complete WHERE snapshot = ?", (self.snapshot,)
+                "SELECT position, path FROM complete WHERE snapshot = ?", (self.snapshot,)
             ).fetchall()
         result = {}
-        for position, filename, size, mtime in entries:
+        for position, filename in entries:
             path = Path(filename)
             try:
                 current = path.stat()
-                if path.is_file() and size > 0 and (current.st_size, current.st_mtime_ns) == (size, mtime):
+                if path.is_file() and current.st_size > 0:
                     result[position] = path
             except OSError:
                 continue
