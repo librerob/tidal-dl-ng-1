@@ -1,8 +1,9 @@
-# tidal-dl-ng
+# TIDAL Downloader NG
 
-[![Release](https://img.shields.io/github/v/release/librerob/tidal-dl-ng-1)](https://img.shields.io/github/v/release/librerob/tidal-dl-ng-1)
-[![Build status](https://img.shields.io/github/actions/workflow/status/librerob/tidal-dl-ng-1/main.yml?branch=main)](https://github.com/librerob/tidal-dl-ng-1/actions/workflows/main.yml?query=branch%3Amain)
-[![Commit activity](https://img.shields.io/github/commit-activity/m/librerob/tidal-dl-ng-1)](https://img.shields.io/github/commit-activity/m/librerob/tidal-dl-ng-1)
-[![License](https://img.shields.io/github/license/librerob/tidal-dl-ng-1)](https://img.shields.io/github/license/librerob/tidal-dl-ng-1)
+![The librerob download mark](https://raw.githubusercontent.com/librerob/tidal-dl-ng-1/master/assets/librerob-mark.svg)
 
-tidal-dl-ng
+The [librerob fork](https://github.com/librerob/tidal-dl-ng-1#readme) provides a desktop app and CLI for downloading tracks, albums, playlists, and videos from TIDAL.
+
+- [Download the Windows preview](https://github.com/librerob/tidal-dl-ng-1/releases)
+- [Install from source](https://github.com/librerob/tidal-dl-ng-1#install-from-source)
+- [Playlist recovery and settings](https://github.com/librerob/tidal-dl-ng-1#recovery-and-settings)
