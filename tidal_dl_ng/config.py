@@ -12,7 +12,7 @@ from threading import Event
 from typing import Any
 
 import tidalapi
-from requests import HTTPError
+from requests import RequestException
 
 from tidal_dl_ng.helper.decorator import SingletonMeta
 from tidal_dl_ng.helper.path import path_config_base, path_file_settings, path_file_token
@@ -244,15 +244,8 @@ class Tidal(BaseConfig, metaclass=SingletonMeta):
                     self.data.expiry_time,
                     is_pkce=do_pkce,
                 )
-            except (HTTPError, JSONDecodeError):
-                result = False
-                # Remove token file. Probably corrupt or invalid.
-                self._remove_token()
-
-                print(
-                    "Either there is something wrong with your credentials / account or some server problems on TIDALs "
-                    "side. Anyway... Try to login again by re-starting this app."
-                )
+            except (RequestException, JSONDecodeError):
+                print("Could not validate the saved TIDAL login. Try again when the service is available.")
 
         return result
 
