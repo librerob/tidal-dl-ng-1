@@ -2,7 +2,7 @@
 # nuitka-project-if: {OS} in ("Darwin"):
 #    nuitka-project: --macos-create-app-bundle
 #    nuitka-project: --macos-app-icon=tidal_dl_ng/ui/icon.icns
-#    nuitka-project: --macos-signed-app-name=com.exislow.TidalDlNg
+#    nuitka-project: --macos-signed-app-name=com.librerob.TidalDlNg
 #    nuitka-project: --macos-app-mode=gui
 # nuitka-project-if: {OS} in ("Linux", "FreeBSD"):
 #    nuitka-project: --linux-icon=tidal_dl_ng/ui/icon.png
@@ -41,11 +41,12 @@
 # nuitka-project: --include-data-files=./pyproject.toml=pyproject.toml
 # nuitka-project: --force-stderr-spec="{TEMP}/tidal-dl-ng.err.log"
 # nuitka-project: --force-stdout-spec="{TEMP}/tidal-dl-ng.out.log"
-# nuitka-project: --company-name=exislow
+# nuitka-project: --company-name=librerob
 
 
 import math
 import sys
+from pathlib import Path
 import time
 from collections.abc import Callable, Sequence
 
@@ -808,8 +809,11 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
     def on_logout(self):
         result: bool = self.tidal.logout()
 
-        if result:
-            sys.exit(0)
+        if not result:
+            QtWidgets.QMessageBox.warning(
+                self, "Logout", "The app could not confirm removal of every saved login. Check the local credential stores."
+            )
+        self.close()
 
     def on_progress_list(self, value: float):
         self.pb_list.setValue(int(math.ceil(value)))
@@ -1169,13 +1173,25 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         self.pb_reload_user_lists.setText(button_text)
 
     def closeEvent(self, event):
-        self.shutdown = True
+        if not self.shutdown:
+            self.shutdown = True
+            handling_app: HandlingApp = HandlingApp()
+            handling_app.event_abort.set()
+            handling_app.event_run.set()
+            self.threadpool.clear()
+            self.centralWidget().setEnabled(False)
+            self.menuBar().setEnabled(False)
+            self.statusBar().showMessage("Stopping downloads…")
+            self._shutdown_timer = QtCore.QTimer(self)
+            self._shutdown_timer.setInterval(100)
+            self._shutdown_timer.timeout.connect(self.close)
+            self._shutdown_timer.start()
 
-        handling_app: HandlingApp = HandlingApp()
-        handling_app.event_abort.set()
-        handling_app.event_run.set()
-        self.threadpool.clear()
-        self.threadpool.waitForDone()
+        if not self.threadpool.waitForDone(0):
+            event.ignore()
+            return
+
+        self._shutdown_timer.stop()
         logger_gui.removeHandler(handler_qt)
         XStream.restore()
         event.accept()
@@ -1194,7 +1210,7 @@ def gui_activate(tidal: Tidal | None = None):
     qdarktheme.setup_theme(additional_qss="QToolTip { border: 0px; }")
 
     # Create icon object and apply it to app window.
-    pixmap: QtGui.QPixmap = QtGui.QPixmap("tidal_dl_ng/ui/icon.png")
+    pixmap: QtGui.QPixmap = QtGui.QPixmap(str(Path(__file__).resolve().parent / "ui" / "icon.png"))
     icon: QtGui.QIcon = QtGui.QIcon(pixmap)
 
     app.setWindowIcon(icon)
@@ -1206,8 +1222,17 @@ def gui_activate(tidal: Tidal | None = None):
         # Make sure Pyinstaller icons are still grouped
         if not sys.argv[0].endswith(".exe"):
             # Arbitrary string
-            my_app_id: str = "exislow.tidal.dl-ng." + __version__
+            my_app_id: str = "librerob.tidal.dl-ng." + __version__
             ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(my_app_id)
+
+    if sys.argv[1:] == ["--portable-smoke-test"]:
+        if pixmap.isNull():
+            sys.exit(1)
+        probe = QtWidgets.QWidget()
+        probe.show()
+        app.processEvents()
+        probe.close()
+        sys.exit(0)
 
     window = MainWindow(tidal=tidal)
 
@@ -1217,6 +1242,8 @@ def gui_activate(tidal: Tidal | None = None):
 
     status = app.exec()
     if not window.shutdown:
+        window.close()
+        window.threadpool.waitForDone()
         window.close()
     sys.exit(status)
 

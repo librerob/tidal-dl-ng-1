@@ -393,6 +393,8 @@ class Download:
                 quality_audio, quality_video, is_parent_album,
             )
         except DownloadStopped:
+            if playlist is not None:
+                raise
             return False, ""
         except TooManyRequests:
             self._record("rate_limited", media, media_id, playlist)
@@ -850,52 +852,65 @@ class Download:
         is_album: bool = isinstance(media, Album)
         result_dirs: [pathlib.Path] = []
 
-        # Iterate through list items
-        if items and not self.event_abort.is_set() and not self.rate_limit.open:
-            with futures.ThreadPoolExecutor(max_workers=self.settings.data.downloads_concurrent_max) as executor:
-                # Dispatch all download tasks to worker threads
-                l_futures: [futures.Future] = [
-                    executor.submit(
-                        self.item,
-                        media=item_media,
-                        file_template=file_name_relative,
-                        quality_audio=quality_audio,
-                        quality_video=quality_video,
-                        download_delay=download_delay,
-                        is_parent_album=is_album,
-                        playlist=list_media_name,
-                    )
-                    for item_media in items
-                ]
-
-                # Report results as they become available
-                for future in futures.as_completed(l_futures):
-                    # Retrieve result
-                    status, result_path_file = future.result()
-
-                    if result_path_file:
-                        result_dirs.append(result_path_file.parent)
-
-                    # Advance progress bar.
-                    progress.advance(p_task1)
-
-                    if not progress_stdout:
-                        self.progress_gui.list_item.emit(progress.tasks[p_task1].percentage)
-
-                    # If app is terminated (CTRL+C)
-                    if self.event_abort.is_set():
-                        # Cancel all not yet started tasks
-                        for f in l_futures:
-                            f.cancel()
-
-                        # End method here.
-                        return
+        completed = self._run_playlist(
+            items, progress, p_task1, result_dirs, progress_stdout,
+            media_options=dict(
+                file_template=file_name_relative,
+                quality_audio=quality_audio,
+                quality_video=quality_video,
+                download_delay=download_delay,
+                is_parent_album=is_album,
+                playlist=list_media_name,
+            ),
+        )
+        if self.event_abort.is_set():
+            return
+        if self.rate_limit.open:
+            self.fn_logger.warning(
+                f"Paused list '{list_media_name}' after processing {completed} of {len(items)} tracks. "
+                f"{len(items) - completed} tracks still pending."
+            )
+            return
 
         # Create playlist file
         if self.settings.data.playlist_create:
             self.playlist_populate(set(result_dirs), list_media_name, is_album)
 
         self.fn_logger.info(f"Finished list '{list_media_name}'.")
+
+    def _run_playlist(self, items, progress, task, result_dirs, progress_stdout, media_options):
+        remaining = iter(items)
+        pending = set()
+        completed = 0
+        workers = max(1, self.settings.data.downloads_concurrent_max)
+        with futures.ThreadPoolExecutor(max_workers=workers) as executor:
+            while True:
+                if self.event_abort.is_set() or self.rate_limit.open:
+                    for future in pending:
+                        future.cancel()
+                else:
+                    while len(pending) < workers and not (self.event_abort.is_set() or self.rate_limit.open):
+                        track = next(remaining, None)
+                        if track is None:
+                            break
+                        pending.add(executor.submit(self.item, media=track, **media_options))
+                if not pending:
+                    break
+
+                finished, pending = futures.wait(pending, return_when=futures.FIRST_COMPLETED)
+                for future in finished:
+                    try:
+                        _, path = future.result()
+                    except (DownloadStopped, futures.CancelledError):
+                        continue
+                    if path:
+                        result_dirs.append(path.parent)
+                    completed += 1
+                    progress.advance(task)
+                    if not progress_stdout:
+                        self.progress_gui.list_item.emit(progress.tasks[task].percentage)
+
+        return completed
 
     def playlist_populate(self, dirs_scoped: [pathlib.Path], name_list: str, is_album: bool) -> [pathlib.Path]:
         result: [pathlib.Path] = []

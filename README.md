@@ -1,13 +1,12 @@
 # 🔰 TIDAL Downloader Next Generation! (tidal-dl-ng)
 
-[![Release](https://img.shields.io/github/v/release/exislow/tidal-dl-ng)](https://img.shields.io/github/v/release/exislow/tidal-dl-ng)
-[![Build status](https://img.shields.io/github/actions/workflow/status/exislow/tidal-dl-ng/on-release-master.yml)](https://github.com/exislow/tidal-dl-ng/actions/workflows/on-release-master.yml)
-[![Commit activity](https://img.shields.io/github/commit-activity/m/exislow/tidal-dl-ng)](https://img.shields.io/github/commit-activity/m/exislow/tidal-dl-ng)
-[![License](https://img.shields.io/github/license/exislow/tidal-dl-ng)](https://img.shields.io/github/license/exislow/tidal-dl-ng)
+[![Release](https://img.shields.io/github/v/release/librerob/tidal-dl-ng-1)](https://img.shields.io/github/v/release/librerob/tidal-dl-ng-1)
+[![Build status](https://img.shields.io/github/actions/workflow/status/librerob/tidal-dl-ng-1/on-release-master.yml)](https://github.com/librerob/tidal-dl-ng-1/actions/workflows/on-release-master.yml)
+[![Commit activity](https://img.shields.io/github/commit-activity/m/librerob/tidal-dl-ng-1)](https://img.shields.io/github/commit-activity/m/librerob/tidal-dl-ng-1)
+[![License](https://img.shields.io/github/license/librerob/tidal-dl-ng-1)](https://img.shields.io/github/license/librerob/tidal-dl-ng-1)
 
 This tool allows to download songs and videos from TIDAL. Multithreaded and multi-chunked downloads are supported.
 
-⚠️ **Windows** Defender / **Anti Virus** software / web browser alerts, while you try to download the app binary: This is a **false positive**. Please read [this issue](https://github.com/exislow/tidal-dl-ng/issues/231), [PyInstaller (used by this project) statement ](https://github.com/pyinstaller/pyinstaller/blob/develop/.github/ISSUE_TEMPLATE/antivirus.md) and [the alternative installation solution](https://github.com/exislow/tidal-dl-ng/?tab=readme-ov-file#-installation--upgrade). ⚠️
 
 **A paid TIDAL plan is required!** Audio quality varies up to HiRes Lossless / TIDAL MAX 24-bit, 192 kHz depending on the song available. You can use the command line or GUI version of this tool.
 
@@ -35,13 +34,14 @@ $ tidal-dl-ng --help
 ╰──────────────────────────────────────────────────────────────────────────────╯
 ```
 
-If you like this projects and want to support it, feel free to buy me a coffee 🙃✌️
-
-<a href="https://www.buymeacoffee.com/exislow" target="_blank"><img src="https://cdn.buymeacoffee.com/buttons/arial-orange.png" alt="Buy Me A Coffee" style="height: 51px !important;width: 217px !important;" ></a>
-<a href="https://ko-fi.com/exislow" target="_blank" rel="noopener noreferrer"><img src="https://help.ko-fi.com/hc/article_attachments/11833788361117" alt="61e11d430afb112ea33c3aa5_Button-1-p-500"></a>
 
 
-## Windows quickstart
+
+## Portable Windows app
+
+Download the Windows portable ZIP from the fork's GitHub Actions artifacts or Releases, extract the entire ZIP, and open `TIDAL Downloader.exe`. Keep the accompanying DLLs and Qt files alongside the executable. The app includes Python and Qt. FFmpeg is optional and can be configured in Settings for media conversion.
+
+## Windows quickstart from source
 
 Install Python 3.12, then run these commands from the checkout in PowerShell.
 
@@ -103,7 +103,7 @@ tidal-dl-ng gui
 ```
 
 If you like to have the GUI version only as a binary, have a look at the
-[release page](https://github.com/exislow/tidal-dl-ng/releases) and download the correct version for your platform.
+[release page](https://github.com/librerob/tidal-dl-ng-1/releases) and download the correct version for your platform.
 
 ## 🧁 Features
 
@@ -187,7 +187,7 @@ Gatekeeper really annoys you, and you like to disable it completely? Follow this
 
 Short answer: It is a lie. Get rid of your antivirus app.
 
-Long answer: See [here](https://github.com/exislow/tidal-dl-ng/issues/231)
+Verify the archive checksum and review your security software's report before running the app.
 
 ### I get an error when `extract_flac` is enabled.
 
@@ -206,5 +206,3 @@ Thanks to all, who have contributed to this project!
 This project is based on:
 
 - https://fpgmaas.github.io/cookiecutter-poetry/
-
-<a href="https://github.com/exislow/tidal-dl-ng/graphs/contributors"><img src="https://contributors-img.web.app/image?repo=exislow/tidal-dl-ng" /></a>

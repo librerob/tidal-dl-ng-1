@@ -260,6 +260,8 @@ def logout() -> bool:
 
     if result:
         print("You have been successfully logged out.")
+    else:
+        raise typer.Exit(code=1)
 
     return result
 

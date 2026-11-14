@@ -1,0 +1,69 @@
+name: Portable Windows
+
+on:
+  pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  portable:
+    runs-on: windows-2022
+    env:
+      QT_QPA_PLATFORM: offscreen
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          architecture: x64
+      - name: Verify a clean pip installation
+        shell: pwsh
+        run: |
+          python -m venv "${{ runner.temp }}/tdn-check"
+          $python = "${{ runner.temp }}/tdn-check/Scripts/python.exe"
+          & $python -m pip install ".[gui,keyring]" pytest
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Push-Location "${{ runner.temp }}"
+          & $python -m pytest "${{ github.workspace }}/tests"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & $python -c "import tidal_dl_ng.gui; from importlib.metadata import entry_points; assert all(callable(next(iter(entry_points(group='console_scripts', name=name))).load()) for name in ('tdn', 'tdng'))"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Pop-Location
+      - name: Compile the portable app
+        shell: pwsh
+        env:
+          DEPLOYMENT: "yes"
+        run: |
+          $python = "${{ runner.temp }}/tdn-check/Scripts/python.exe"
+          & $python -m pip install "nuitka==2.5.9"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $version = & $python -c "from importlib.metadata import version; print(version('tidal-dl-ng'))"
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & $python -m nuitka --msvc=latest "--file-version=$version" "--product-version=$version" "--output-filename=TIDAL Downloader.exe" --include-package=keyring tidal_dl_ng/gui.py
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          Copy-Item LICENSE dist/gui.dist/
+          Compress-Archive -Path dist/gui.dist/* -DestinationPath dist/tidal-dl-ng-windows-x64.zip
+          Get-FileHash dist/tidal-dl-ng-windows-x64.zip -Algorithm SHA256 | Select-Object -ExpandProperty Hash | Set-Content dist/tidal-dl-ng-windows-x64.zip.sha256
+      - name: Launch the extracted executable
+        shell: pwsh
+        run: |
+          $unpacked = Join-Path $env:RUNNER_TEMP "tdn-portable"
+          Expand-Archive dist/tidal-dl-ng-windows-x64.zip $unpacked
+          $env:PATH = "$env:SystemRoot\system32;$env:SystemRoot"
+          $exe = Join-Path $unpacked "TIDAL Downloader.exe"
+          $app = Start-Process -FilePath $exe -ArgumentList "--portable-smoke-test" -WorkingDirectory $env:RUNNER_TEMP -PassThru -WindowStyle Hidden
+          if (-not $app.WaitForExit(30000)) {
+            Stop-Process -Id $app.Id
+            throw "Portable app smoke test timed out."
+          }
+          if ($app.ExitCode -ne 0) { throw "Portable app exited with code $($app.ExitCode)." }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: tidal-dl-ng-windows-x64
+          path: |
+            dist/tidal-dl-ng-windows-x64.zip
+            dist/tidal-dl-ng-windows-x64.zip.sha256
