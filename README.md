@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="assets/readme-banner.svg" width="100%" alt="TIDAL Downloader NG by librerob">
+  <img src="assets/readme-banner.svg" width="100%" alt="TIDAL Downloader NG">
 
   <p>Download TIDAL tracks, albums, playlists, and videos from the desktop app or CLI.</p>
 
