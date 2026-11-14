@@ -119,7 +119,9 @@ class Tidal(BaseConfig, metaclass=SingletonMeta):
             return None
         try:
             return import_module("keyring")
-        except ImportError:
+        except ModuleNotFoundError as exc:
+            if exc.name != "keyring":
+                raise
             return None
 
     def read(self, path: str) -> bool:
@@ -144,8 +146,12 @@ class Tidal(BaseConfig, metaclass=SingletonMeta):
 
         if not self.data.access_token:
             return False
-        if backend is not None or os.name == "nt":
-            self.save()
+        if backend is not None:
+            try:
+                backend.set_password(KEYRING_SERVICE, KEYRING_ACCOUNT, self.data.to_json())
+                token_path.unlink()
+            except Exception:
+                warnings.warn("Could not move the saved TIDAL login to the OS keyring.", RuntimeWarning, stacklevel=2)
         return True
 
     def save(self, config_to_compare: str = None) -> None:
@@ -167,20 +173,37 @@ class Tidal(BaseConfig, metaclass=SingletonMeta):
             descriptor = os.open(temp, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
             os.close(descriptor)
             if os.name == "nt":
-                sid = subprocess.check_output(  # noqa: S603, S607
-                    ["whoami.exe", "/user", "/fo", "csv", "/nh"],
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                ).strip().rsplit(",", 1)[-1].strip('"')
-                subprocess.run(
-                    ["icacls.exe", str(temp), "/inheritance:r", "/grant:r", f"*{sid}:(F)"],  # noqa: S603, S607
-                    check=True,
-                    stdout=subprocess.DEVNULL,
-                    stderr=subprocess.DEVNULL,
-                )
+                try:
+                    self._restrict_windows_token(temp)
+                except (OSError, subprocess.CalledProcessError):
+                    warnings.warn(
+                        "Could not secure the TIDAL login file. The current login is available for this session only.",
+                        RuntimeWarning,
+                        stacklevel=2,
+                    )
+                    return
             temp.write_text(payload, encoding="utf-8")
             temp.replace(token_path)
+
+    @staticmethod
+    def _restrict_windows_token(path: Path):
+        system_root = os.environ.get("SystemRoot", "")
+        system_directory = Path(system_root) / "System32"
+        if not system_directory.is_absolute():
+            msg = "Windows system directory is unavailable."
+            raise OSError(msg)
+        sid = subprocess.check_output(
+            [str(system_directory / "whoami.exe"), "/user", "/fo", "csv", "/nh"],  # noqa: S603
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+        ).strip().rsplit(",", 1)[-1].strip('"')
+        subprocess.run(
+            [str(system_directory / "icacls.exe"), str(path), "/inheritance:r", "/grant:r", f"*{sid}:(F)"],  # noqa: S603
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
 
     def _remove_token(self):
         removed = True
@@ -190,12 +213,9 @@ class Tidal(BaseConfig, metaclass=SingletonMeta):
             warnings.warn("Could not remove the saved TIDAL login file.", RuntimeWarning, stacklevel=2)
             removed = False
 
-        backend = self._keyring(for_logout=True)
         try:
-            if backend is None:
-                warnings.warn("The OS keyring is unavailable. Saved login removal could not be verified.", RuntimeWarning, stacklevel=2)
-                return False
-            if backend.get_password(KEYRING_SERVICE, KEYRING_ACCOUNT) is not None:
+            backend = self._keyring(for_logout=True)
+            if backend is not None and backend.get_password(KEYRING_SERVICE, KEYRING_ACCOUNT) is not None:
                 backend.delete_password(KEYRING_SERVICE, KEYRING_ACCOUNT)
         except Exception:
             warnings.warn("Could not verify removal of the saved TIDAL login from the OS keyring.", RuntimeWarning, stacklevel=2)
