@@ -4,9 +4,9 @@
   <p>Download TIDAL tracks, albums, playlists, and videos from the desktop app or CLI.</p>
 
   <p>
-    <a href="https://github.com/librerob/tidal-dl-ng-1/releases/download/0.24.6-preview.1/tidal-dl-ng-windows-x64.zip"><img src="https://img.shields.io/badge/Download-Windows_x64-63EAD8?style=for-the-badge&amp;labelColor=141A32" alt="Download for Windows x64"></a>
+    <a href="https://github.com/librerob/tidal-dl-ng-1/releases/download/0.24.6-preview.2/tidal-dl-ng-windows-x64.zip"><img src="https://img.shields.io/badge/Download-Windows_x64-63EAD8?style=for-the-badge&amp;labelColor=141A32" alt="Download for Windows x64"></a>
     <a href="#downloads"><img src="https://img.shields.io/badge/Downloads-macOS_%26_Linux-86A7FF?style=for-the-badge&amp;labelColor=141A32" alt="Downloads for macOS and Linux"></a>
-    <a href="https://github.com/librerob/tidal-dl-ng-1/releases/tag/0.24.6-preview.1"><img src="https://img.shields.io/badge/Release-0.24.6_preview.1-B2A1FF?style=for-the-badge&amp;labelColor=141A32" alt="Release 0.24.6 preview 1"></a>
+    <a href="https://github.com/librerob/tidal-dl-ng-1/releases/tag/0.24.6-preview.2"><img src="https://img.shields.io/badge/Release-0.24.6_preview.2-B2A1FF?style=for-the-badge&amp;labelColor=141A32" alt="Release 0.24.6 preview 2"></a>
   </p>
 
   <p><a href="#downloads">All downloads</a> · <a href="#features">Features</a> · <a href="#install-from-source">Source install</a> · <a href="#recovery-and-settings">Recovery and settings</a></p>
@@ -20,12 +20,12 @@ A paid TIDAL plan is required. Available audio quality depends on the track and 
 
 | Platform | Package | Launch |
 | --- | --- | --- |
-| Windows x64 | [ZIP](https://github.com/librerob/tidal-dl-ng-1/releases/download/0.24.6-preview.1/tidal-dl-ng-windows-x64.zip) | Extract the full archive and open `TIDAL Downloader.exe`. |
-| macOS Apple Silicon | [ZIP](https://github.com/librerob/tidal-dl-ng-1/releases/download/0.24.6-preview.1/tidal-dl-ng-macos-arm64.zip) | Extract the ZIP, then open `TIDAL Downloader NG.app`. |
-| macOS Intel | [ZIP](https://github.com/librerob/tidal-dl-ng-1/releases/download/0.24.6-preview.1/tidal-dl-ng-macos-x64.zip) | Extract the ZIP, then open `TIDAL Downloader NG.app`. |
-| Linux x86-64 | [AppImage](https://github.com/librerob/tidal-dl-ng-1/releases/download/0.24.6-preview.1/tidal-dl-ng-linux-x64.AppImage) | Make the AppImage executable and run it. |
+| Windows x64 | [ZIP](https://github.com/librerob/tidal-dl-ng-1/releases/download/0.24.6-preview.2/tidal-dl-ng-windows-x64.zip) | Extract the full archive and open `TIDAL Downloader.exe`. |
+| macOS Apple Silicon | [ZIP](https://github.com/librerob/tidal-dl-ng-1/releases/download/0.24.6-preview.2/tidal-dl-ng-macos-arm64.zip) | Extract the ZIP, then open `TIDAL Downloader NG.app`. |
+| macOS Intel | [ZIP](https://github.com/librerob/tidal-dl-ng-1/releases/download/0.24.6-preview.2/tidal-dl-ng-macos-x64.zip) | Extract the ZIP, then open `TIDAL Downloader NG.app`. |
+| Linux x86-64 | [AppImage](https://github.com/librerob/tidal-dl-ng-1/releases/download/0.24.6-preview.2/tidal-dl-ng-linux-x64.AppImage) | Make the AppImage executable and run it. |
 
-Python and Qt are bundled. SHA-256 checksums are on the [release page](https://github.com/librerob/tidal-dl-ng-1/releases/tag/0.24.6-preview.1). The Windows preview is unsigned and the macOS preview is not notarized.
+Python and Qt are bundled. SHA-256 checksums are on the [release page](https://github.com/librerob/tidal-dl-ng-1/releases/tag/0.24.6-preview.2). The Windows preview is unsigned and the macOS preview is not notarized.
 
 For Linux, open a terminal in the download folder and run:
 
