@@ -1,0 +1,64 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 236" role="img" aria-labelledby="title">
+  <title id="title">TIDAL Downloader NG by librerob</title>
+  <defs>
+    <linearGradient id="background"><stop stop-color="#0C1226"/><stop offset="1" stop-color="#170C25"/></linearGradient>
+    <linearGradient id="signal"><stop stop-color="#52F5DA"/><stop offset=".58" stop-color="#8294FF"/><stop offset="1" stop-color="#F392E9"/></linearGradient>
+    <radialGradient id="glow"><stop stop-color="#7848FF" stop-opacity=".23"/><stop offset="1" stop-color="#7848FF" stop-opacity="0"/></radialGradient>
+    <pattern id="grid" width="24" height="24" patternUnits="userSpaceOnUse"><path d="M0 24V0h24" fill="none" stroke="#dee5ff" stroke-opacity=".09"/></pattern>
+    <clipPath id="frame"><rect width="1080" height="236" rx="24"/></clipPath>
+  </defs>
+  <g clip-path="url(#frame)">
+    <rect width="1080" height="236" fill="url(#background)"/>
+    <ellipse cx="891" cy="113" rx="330" ry="207" fill="url(#glow)"/>
+    <rect x="526" width="554" height="236" fill="url(#grid)"/>
+    <path d="M548 118h502" stroke="#b2afff" stroke-opacity=".25" stroke-dasharray="2 6"/>
+    <g fill="url(#signal)">
+    <rect x="564" y="112" width="5" height="12" rx="2.5" opacity="0.23"/>
+    <rect x="577" y="108.5" width="5" height="19" rx="2.5" opacity="0.262"/>
+    <rect x="590" y="109" width="5" height="18" rx="2.5" opacity="0.29400000000000004"/>
+    <rect x="603" y="102" width="5" height="32" rx="2.5" opacity="0.326"/>
+    <rect x="616" y="101" width="5" height="34" rx="2.5" opacity="0.358"/>
+    <rect x="629" y="97" width="5" height="42" rx="2.5" opacity="0.39"/>
+    <rect x="642" y="94" width="5" height="48" rx="2.5" opacity="0.42200000000000004"/>
+    <rect x="655" y="99.5" width="5" height="37" rx="2.5" opacity="0.454"/>
+    <rect x="668" y="95" width="5" height="46" rx="2.5" opacity="0.486"/>
+    <rect x="681" y="106.5" width="5" height="23" rx="2.5" opacity="0.518"/>
+    <rect x="694" y="103" width="5" height="30" rx="2.5" opacity="0.55"/>
+    <rect x="707" y="110.5" width="5" height="15" rx="2.5" opacity="0.79"/>
+    <rect x="720" y="109.5" width="5" height="17" rx="2.5" opacity="0.79"/>
+    <rect x="733" y="110.5" width="5" height="15" rx="2.5" opacity="0.79"/>
+    <rect x="746" y="108" width="5" height="20" rx="2.5" opacity="0.79"/>
+    <rect x="759" y="105" width="5" height="26" rx="2.5" opacity="0.79"/>
+    <rect x="772" y="102.5" width="5" height="31" rx="2.5" opacity="0.79"/>
+    <rect x="785" y="95" width="5" height="46" rx="2.5" opacity="0.79"/>
+    <rect x="798" y="100.5" width="5" height="35" rx="2.5" opacity="0.79"/>
+    <rect x="811" y="87.5" width="5" height="61" rx="2.5" opacity="0.79"/>
+    <rect x="824" y="102.5" width="5" height="31" rx="2.5" opacity="0.79"/>
+    <rect x="837" y="87.5" width="5" height="61" rx="2.5" opacity="0.79"/>
+    <rect x="850" y="98" width="5" height="40" rx="2.5" opacity="0.79"/>
+    <rect x="863" y="90" width="5" height="56" rx="2.5" opacity="0.79"/>
+    <rect x="876" y="92.5" width="5" height="51" rx="2.5" opacity="0.79"/>
+    <rect x="889" y="89.5" width="5" height="57" rx="2.5" opacity="0.79"/>
+    <rect x="902" y="82.5" width="5" height="71" rx="2.5" opacity="0.79"/>
+    <rect x="915" y="88.5" width="5" height="59" rx="2.5" opacity="0.79"/>
+    <rect x="928" y="70" width="5" height="96" rx="2.5" opacity="0.79"/>
+    <rect x="941" y="92" width="5" height="52" rx="2.5" opacity="0.79"/>
+    <rect x="954" y="64.5" width="5" height="107" rx="2.5" opacity="0.79"/>
+    <rect x="967" y="88.5" width="5" height="59" rx="2.5" opacity="0.79"/>
+    <rect x="980" y="72" width="5" height="92" rx="2.5" opacity="0.79"/>
+    <rect x="993" y="88" width="5" height="60" rx="2.5" opacity="0.79"/>
+    <rect x="1006" y="89" width="5" height="58" rx="2.5" opacity="0.79"/>
+    <rect x="1019" y="96" width="5" height="44" rx="2.5" opacity="0.79"/>
+    <rect x="1032" y="104" width="5" height="28" rx="2.5" opacity="0.79"/>
+    <rect x="1045" y="105.5" width="5" height="25" rx="2.5" opacity="0.79"/>
+    <rect x="1058" y="110" width="5" height="16" rx="2.5" opacity="0.79"/>
+    </g>
+    <path d="M0 233h1080v3H0z" fill="url(#signal)"/>
+  </g>
+  <rect x=".5" y=".5" width="1079" height="235" rx="24" fill="none" stroke="#a4abff" stroke-opacity=".23"/>
+  <g font-family="Segoe UI,Arial,sans-serif">
+    <text x="46" y="67" fill="#79ebdf" font-size="19" font-weight="600" letter-spacing="4">LIBREROB</text>
+    <text x="43" y="128" fill="#f5f7ff" font-size="52" font-weight="700" letter-spacing="-1.9">TIDAL Downloader</text>
+    <text x="44" y="183" fill="url(#signal)" font-size="51" font-weight="750" letter-spacing="-1.8">NG</text>
+  </g>
+</svg>
