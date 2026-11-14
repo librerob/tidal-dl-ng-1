@@ -3,8 +3,8 @@ import os
 import shutil
 import subprocess
 import tempfile
+import warnings
 from collections.abc import Callable
-from contextlib import suppress
 from importlib import import_module
 from json import JSONDecodeError
 from pathlib import Path
@@ -114,8 +114,8 @@ class Tidal(BaseConfig, metaclass=SingletonMeta):
             self.settings = settings
             self.settings_apply()
 
-    def _keyring(self):
-        if not self.settings.data.use_keyring:
+    def _keyring(self, *, for_logout=False):
+        if not for_logout and not self.settings.data.use_keyring:
             return None
         try:
             return import_module("keyring")
@@ -183,11 +183,24 @@ class Tidal(BaseConfig, metaclass=SingletonMeta):
             temp.replace(token_path)
 
     def _remove_token(self):
-        backend = self._keyring()
-        if backend is not None:
-            with suppress(backend.errors.PasswordDeleteError):
+        removed = True
+        try:
+            Path(self.file_path).unlink(missing_ok=True)
+        except OSError:
+            warnings.warn("Could not remove the saved TIDAL login file.", RuntimeWarning, stacklevel=2)
+            removed = False
+
+        backend = self._keyring(for_logout=True)
+        try:
+            if backend is None:
+                warnings.warn("The OS keyring is unavailable. Saved login removal could not be verified.", RuntimeWarning, stacklevel=2)
+                return False
+            if backend.get_password(KEYRING_SERVICE, KEYRING_ACCOUNT) is not None:
                 backend.delete_password(KEYRING_SERVICE, KEYRING_ACCOUNT)
-        Path(self.file_path).unlink(missing_ok=True)
+        except Exception:
+            warnings.warn("Could not verify removal of the saved TIDAL login from the OS keyring.", RuntimeWarning, stacklevel=2)
+            removed = False
+        return removed
 
     def settings_apply(self, settings: Settings = None) -> bool:
         if settings:
@@ -266,11 +279,10 @@ class Tidal(BaseConfig, metaclass=SingletonMeta):
         return result
 
     def logout(self):
-        self._remove_token()
+        removed = self._remove_token()
         self.token_from_storage = False
-        del self.session
-
-        return True
+        self.data = ModelToken()
+        return removed
 
 
 class HandlingApp(metaclass=SingletonMeta):

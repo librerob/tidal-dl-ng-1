@@ -1,7 +1,7 @@
 [project]
 name = "tidal-dl-ng"
 authors = [
-  {name = "Robert Honz", email = "cen.sored@gmail.com"},
+  {name = "Robert Honz"},
   {name = "librerob"}
 ]
 version = "0.24.6"
