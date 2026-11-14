@@ -118,7 +118,7 @@ def _download(ctx: typer.Context, urls: list[str], try_login: bool = True) -> bo
                 media_type: MediaType | bool = False
 
                 # Exit loop if abort signal is set.
-                if handling_app.event_abort.is_set():
+                if handling_app.event_abort.is_set() or dl.rate_limit.open:
                     return False
 
                 # Extract media name and id from link.
@@ -155,7 +155,7 @@ def _download(ctx: typer.Context, urls: list[str], try_login: bool = True) -> bo
 
                     for item_id in item_ids:
                         # Exit loop if abort signal is set.
-                        if handling_app.event_abort.is_set():
+                        if handling_app.event_abort.is_set() or dl.rate_limit.open:
                             return False
 
                         dl.items(
@@ -166,11 +166,14 @@ def _download(ctx: typer.Context, urls: list[str], try_login: bool = True) -> bo
                             download_delay=settings.data.download_delay,
                         )
         finally:
+            dl.report()
+            if dl.rate_limit.open:
+                print("TIDAL rate limit reached. Queue paused. Wait before rerunning with skip_existing enabled.")
             # Clear and stop progress display
             progress.refresh()
             progress.stop()
 
-    return True
+    return not dl.rate_limit.open
 
 
 @app.callback()

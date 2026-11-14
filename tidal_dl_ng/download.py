@@ -1,3 +1,4 @@
+import json
 import os
 import pathlib
 import random
@@ -6,7 +7,7 @@ import tempfile
 import time
 from collections.abc import Callable
 from concurrent import futures
-from threading import Event
+from threading import Event, Lock
 from uuid import uuid4
 
 import m3u8
@@ -50,6 +51,7 @@ from tidal_dl_ng.helper.tidal import (
 from tidal_dl_ng.metadata import Metadata
 from tidal_dl_ng.model.downloader import DownloadSegmentResult
 from tidal_dl_ng.model.gui_data import ProgressBars
+from tidal_dl_ng.rate_limit import DownloadStopped, RateLimit
 
 
 # TODO: Set appropriate client string and use it for video download.
@@ -98,7 +100,11 @@ class Download:
         self.progress = progress
         self.progress_overall = progress_overall
         self.path_base = path_base
-        self.event_abort = event_abort
+        self.event_abort = event_abort if event_abort is not None else Event()
+        self.rate_limit = RateLimit(self.event_abort, self.settings.data)
+        self.results_lock = Lock()
+        self.counts = dict.fromkeys(("downloaded", "skipped_existing", "rate_limited", "unavailable", "other"), 0)
+        self.failures = []
         self.event_run = event_run
 
         if not self.settings.data.path_binary_ffmpeg and (
@@ -201,7 +207,7 @@ class Download:
                         self.fn_logger.error(f"Something went wrong while downloading {media_name}. File is corrupt!")
 
                     # If app is terminated (CTRL+C)
-                    if self.event_abort.is_set():
+                    if self.event_abort.is_set() or self.rate_limit.open:
                         # Cancel all not yet started tasks
                         for f in l_futures:
                             f.cancel()
@@ -318,7 +324,84 @@ class Download:
 
         return result
 
+    def _record(self, status, media=None, media_id=None, playlist=None):
+        with self.results_lock:
+            self.counts[status] += 1
+            if status in {"rate_limited", "unavailable", "other"}:
+                artist = getattr(media, "artist", None)
+                self.failures.append({
+                    "track_id": str(getattr(media, "id", media_id) or ""),
+                    "title": getattr(media, "name", ""),
+                    "artist": getattr(artist, "name", ""),
+                    "playlist": playlist,
+                    "reason": status,
+                })
+
+    def report(self):
+        with self.results_lock:
+            counts = self.counts.copy()
+            failures = self.failures.copy()
+            self.counts = dict.fromkeys(counts, 0)
+            self.failures.clear()
+        failed = sum(counts[reason] for reason in ("rate_limited", "unavailable", "other"))
+        if counts["downloaded"] or counts["skipped_existing"] or failed:
+            self.fn_logger.info(
+                f'Downloaded {counts["downloaded"]}, skipped existing {counts["skipped_existing"]}, failed {failed} '
+                f'(rate_limited {counts["rate_limited"]}, unavailable {counts["unavailable"]}, other {counts["other"]}).'
+            )
+        if failures:
+            base = pathlib.Path(self.path_base).expanduser()
+            destination = base / "failed_tracks.json"
+            try:
+                base.mkdir(parents=True, exist_ok=True)
+                old = json.loads(destination.read_text(encoding="utf-8")) if destination.exists() else []
+                if not isinstance(old, list):
+                    msg = "Invalid failed-track report"
+                    raise TypeError(msg)  # noqa: TRY301
+                with tempfile.TemporaryDirectory(dir=base) as directory:
+                    temporary = pathlib.Path(directory) / destination.name
+                    temporary.write_text(json.dumps(old + failures, ensure_ascii=False, indent=2), encoding="utf-8")
+                    temporary.replace(destination)
+            except (OSError, TypeError, ValueError):
+                with self.results_lock:
+                    self.failures[:0] = failures
+                self.fn_logger.warning("Could not update failed_tracks.json.")
+
     def item(
+        self,
+        file_template: str,
+        media: Track | Video = None,
+        media_id: str = None,
+        media_type: MediaType = None,
+        video_download: bool = True,
+        download_delay: bool = False,
+        quality_audio: Quality | None = None,
+        quality_video: QualityVideo | None = None,
+        is_parent_album: bool = False,
+        playlist: str | None = None,
+    ) -> tuple[bool, pathlib.Path | str]:
+        try:
+            self.rate_limit.wait()
+            if isinstance(media, Track) and not media.available:
+                self._record("unavailable", media, media_id, playlist)
+                return False, ""
+            status, path = self._item(
+                file_template, media, media_id, media_type, video_download, download_delay,
+                quality_audio, quality_video, is_parent_album,
+            )
+        except DownloadStopped:
+            return False, ""
+        except TooManyRequests:
+            self._record("rate_limited", media, media_id, playlist)
+            return False, ""
+        except Exception:
+            self.fn_logger.exception("Could not download item.")
+            self._record("other", media, media_id, playlist)
+            return False, ""
+        self._record("downloaded" if status else "skipped_existing" if path else "other", media, media_id, playlist)
+        return status, path
+
+    def _item(
         self,
         file_template: str,
         media: Track | Video = None,
@@ -333,7 +416,7 @@ class Download:
         try:
             if media_id and media_type:
                 # If no media instance is provided, we need to create the media instance.
-                media = instantiate_media(self.session, media_type, media_id)
+                media = self.rate_limit.call(lambda: instantiate_media(self.session, media_type, media_id))
             elif isinstance(media, Track):  # Check if media is available not deactivated / removed from TIDAL.
                 if not media.available:
                     self.fn_logger.info(
@@ -343,10 +426,12 @@ class Download:
                     return False, ""
                 else:
                     # Re-create media instance with full album information
-                    media = self.session.track(media.id, with_album=True)
+                    media = self.rate_limit.call(lambda: self.session.track(media.id, with_album=True))
             elif not media:
-                raise MediaMissing
-        except:
+                return False, ""
+        except (TooManyRequests, DownloadStopped):
+            raise
+        except Exception:
             return False, ""
 
         # If video download is not allowed end here
@@ -396,6 +481,7 @@ class Download:
         else:
             skip_file: bool = False
 
+        result_download = False
         if not skip_file:
             # If a quality is explicitly set, change it and remember the previously set quality.
             quality_audio_old: Quality = self.adjust_quality_audio(quality_audio) if quality_audio else quality_audio
@@ -409,19 +495,14 @@ class Download:
 
             if isinstance(media, Track):
                 try:
-                    media_stream: Stream = media.get_stream()
+                    media_stream: Stream = self.rate_limit.call(media.get_stream)
                     stream_manifest = media_stream.get_stream_manifest()
-                except TooManyRequests:
-                    self.fn_logger.exception(
-                        f"Too many requests against TIDAL backend. Skipping '{name_builder_item(media)}'. "
-                        f"Consider to activate delay between downloads."
-                    )
-
-                    return False, ""
                 except Exception:
-                    self.fn_logger.exception(f"Something went wrong. Skipping '{name_builder_item(media)}'.")
-
-                    return False, ""
+                    if quality_audio:
+                        self.adjust_quality_audio(quality_audio_old)
+                    if quality_video:
+                        self.adjust_quality_video(quality_video_old)
+                    raise
 
                 file_extension = stream_manifest.file_extension
 
@@ -486,7 +567,7 @@ class Download:
                         shutil.move(tmp_path_file, path_media_dst)
 
             # If files needs to be symlinked, do postprocessing here.
-            if self.settings.data.symlink_to_track and not isinstance(media, Video):
+            if (skip_download or result_download) and self.settings.data.symlink_to_track and not isinstance(media, Video):
                 path_media_track_dir: pathlib.Path = self.media_move_and_symlink(media, path_media_dst, file_extension)
 
             if quality_audio:
@@ -499,7 +580,7 @@ class Download:
         else:
             self.fn_logger.debug(f"Download skipped, since file exists: '{path_media_dst}'")
 
-        status_download: bool = not skip_file
+        status_download = result_download
 
         # Whether a file was downloaded or skipped and the download delay is enabled, wait until the next download.
         # Only use this, if you have a list of several Track items.
@@ -514,7 +595,7 @@ class Download:
             self.fn_logger.debug(f"Next download will start in {time_sleep} seconds.")
             time.sleep(time_sleep)
 
-        return status_download, path_media_dst
+        return status_download, path_media_dst if skip_file or skip_download or result_download else ""
 
     def media_move_and_symlink(
         self, media: Track | Video, path_media_src: pathlib.Path, file_extension: str
@@ -716,7 +797,10 @@ class Download:
     ):
         # If no media instance is provided, we need to create the media instance.
         if media_id and media_type:
-            media = instantiate_media(self.session, media_type, media_id)
+            try:
+                media = self.rate_limit.call(lambda: instantiate_media(self.session, media_type, media_id))
+            except (DownloadStopped, TooManyRequests):
+                return
         elif not media:
             raise MediaMissing
 
@@ -728,7 +812,10 @@ class Download:
         list_media_name_short: str = list_media_name[:30]
 
         # Get all items of the list.
-        items = items_results_all(media, videos_include=video_download)
+        try:
+            items = self.rate_limit.call(lambda: items_results_all(media, videos_include=video_download))
+        except (DownloadStopped, TooManyRequests):
+            return
 
         # Determine where to redirect the progress information.
         if self.progress_gui is None:
@@ -748,7 +835,7 @@ class Download:
         result_dirs: [pathlib.Path] = []
 
         # Iterate through list items
-        while not progress.finished:
+        if items and not self.event_abort.is_set() and not self.rate_limit.open:
             with futures.ThreadPoolExecutor(max_workers=self.settings.data.downloads_concurrent_max) as executor:
                 # Dispatch all download tasks to worker threads
                 l_futures: [futures.Future] = [
@@ -760,6 +847,7 @@ class Download:
                         quality_video=quality_video,
                         download_delay=download_delay,
                         is_parent_album=is_album,
+                        playlist=list_media_name,
                     )
                     for item_media in items
                 ]

@@ -20,6 +20,8 @@ class Settings:
     # TODO: Implement multi threading for downloads.
     # multi_thread: bool = False
     download_delay: bool = True
+    rate_limit_attempts: int = 5
+    rate_limit_breaker_threshold: int = 5
     download_base_path: str = "~/download"
     quality_audio: Quality = Quality.low_320k
     quality_video: QualityVideo = QualityVideo.P480
@@ -61,6 +63,8 @@ class HelpSettings:
     video_download: str = "Allow download of videos."
     multi_thread: str = "Download several tracks in parallel."
     download_delay: str = "Activate randomized download delay to mimic human behaviour."
+    rate_limit_attempts: str = "Maximum attempts per TIDAL request after rate limiting."
+    rate_limit_breaker_threshold: str = "Consecutive rate-limit responses before pausing the queue."
     download_base_path: str = "Where to store the downloaded media."
     quality_audio: str = (
         'Desired audio download quality: "LOW" (96kbps), "HIGH" (320kbps), '
