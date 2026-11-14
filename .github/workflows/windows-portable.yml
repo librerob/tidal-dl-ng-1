@@ -5,6 +5,11 @@ on:
   push:
     branches: [master]
   workflow_dispatch:
+    inputs:
+      publish_preview:
+        description: Publish the tested Windows ZIP to GitHub Releases
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -70,3 +75,32 @@ jobs:
           path: |
             dist/tidal-dl-ng-windows-x64.zip
             dist/tidal-dl-ng-windows-x64.zip.sha256
+
+  release-preview:
+    needs: portable
+    if: >-
+      github.ref == 'refs/heads/master' &&
+      ((github.event_name == 'workflow_dispatch' && inputs.publish_preview) ||
+       (github.event_name == 'push' && startsWith(github.event.head_commit.message, 'Publish Windows preview 0.24.6-preview.1')))
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: tidal-dl-ng-windows-x64
+          path: release-files
+      - name: Publish the tested Windows ZIP and checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_COMMIT: ${{ github.sha }}
+        run: |
+          cd release-files
+          expected=$(tr -d '\r\n' < tidal-dl-ng-windows-x64.zip.sha256)
+          printf '%s  %s\n' "${expected,,}" tidal-dl-ng-windows-x64.zip | sha256sum --check
+          gh release create 0.24.6-preview.1 \
+            --target "$RELEASE_COMMIT" --prerelease \
+            --title "TIDAL Downloader 0.24.6 Windows Preview" \
+            --notes "Extract the Windows x64 ZIP and launch TIDAL Downloader.exe. Python is bundled. FFmpeg remains optional for media conversion. The packaged executable passed the Windows CI launch smoke test." \
+            tidal-dl-ng-windows-x64.zip tidal-dl-ng-windows-x64.zip.sha256
