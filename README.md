@@ -1,45 +1,21 @@
 # 🔰 TIDAL Downloader Next Generation! (tidal-dl-ng)
 
-[![Release](https://img.shields.io/github/v/release/librerob/tidal-dl-ng-1)](https://img.shields.io/github/v/release/librerob/tidal-dl-ng-1)
-[![Build status](https://img.shields.io/github/actions/workflow/status/librerob/tidal-dl-ng-1/on-release-master.yml)](https://github.com/librerob/tidal-dl-ng-1/actions/workflows/on-release-master.yml)
+[![Release](https://img.shields.io/github/v/release/librerob/tidal-dl-ng-1?include_prereleases)](https://github.com/librerob/tidal-dl-ng-1/releases)
+[![Build status](https://img.shields.io/github/actions/workflow/status/librerob/tidal-dl-ng-1/windows-portable.yml)](https://github.com/librerob/tidal-dl-ng-1/actions/workflows/windows-portable.yml)
 [![Commit activity](https://img.shields.io/github/commit-activity/m/librerob/tidal-dl-ng-1)](https://img.shields.io/github/commit-activity/m/librerob/tidal-dl-ng-1)
 [![License](https://img.shields.io/github/license/librerob/tidal-dl-ng-1)](https://img.shields.io/github/license/librerob/tidal-dl-ng-1)
 
 This tool allows to download songs and videos from TIDAL. Multithreaded and multi-chunked downloads are supported.
 
-
 **A paid TIDAL plan is required!** Audio quality varies up to HiRes Lossless / TIDAL MAX 24-bit, 192 kHz depending on the song available. You can use the command line or GUI version of this tool.
 
 ![App Image](assets/app.png)
 
-```bash
-$ tidal-dl-ng --help
-
- Usage: tidal-dl-ng [OPTIONS] COMMAND [ARGS]...
-
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --version  -v                                                                │
-│ --help     -h        Show this message and exit.                             │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ cfg    Print or set an option. If no arguments are given, all options will   │
-│        be listed. If only one argument is given, the value will be printed   │
-│        for this option. To set a value for an option simply pass the value   │
-│        as the second argument                                                │
-│ dl                                                                           │
-│ dl_fav Download from a favorites collection.                                 │
-│ gui                                                                          │
-│ login                                                                        │
-│ logout                                                                       │
-╰──────────────────────────────────────────────────────────────────────────────╯
-```
-
-
-
-
 ## Portable Windows app
 
-Download the Windows portable ZIP from the fork's GitHub Actions artifacts or Releases, extract the entire ZIP, and open `TIDAL Downloader.exe`. Keep the accompanying DLLs and Qt files alongside the executable. The app includes Python and Qt. FFmpeg is optional and can be configured in Settings for media conversion.
+[Download the Windows x64 preview ZIP](https://github.com/librerob/tidal-dl-ng-1/releases/download/0.24.6-preview.1/tidal-dl-ng-windows-x64.zip) and extract the entire archive. Double-click `TIDAL Downloader.exe` and keep the accompanying files alongside it. Python and Qt are included. For FLAC extraction or video conversion, install FFmpeg separately and set `path_binary_ffmpeg` in Settings.
+
+The [preview release page](https://github.com/librerob/tidal-dl-ng-1/releases/tag/0.24.6-preview.1) has the SHA-256 checksum and release notes.
 
 ## Windows quickstart from source
 
@@ -53,25 +29,18 @@ winget install Gyan.FFmpeg
 tdng
 ```
 
-If FFmpeg was just installed, open a new terminal and activate the venv again so Windows picks up the updated PATH.
+After installing FFmpeg, set `path_binary_ffmpeg` in Settings to the full path to `ffmpeg.exe`.
 
 ## Troubleshooting
 
 - **TIDAL returns HTTP 429.** The downloader waits before retrying. If the queue pauses, give TIDAL time to recover, then resume it in the GUI or rerun the same CLI command with `skip_existing` enabled.
-- **Some tracks failed.** Look for `failed_tracks.json` in the configured download folder. It records each attempted failure with its track ID, title, artist, playlist, and reason. Use the IDs to re-queue the failed tracks after resolving the error.
+- **Some tracks failed.** Look for `failed_tracks.json` in the configured download folder. It records each attempted failure with its track ID, title, artist, playlist, and reason. Run `tdn retry-failed` to retry eligible standalone tracks. Reopen the original playlist to retry playlist failures in their original folders.
 - **Turn off startup update checks.** Clear `check_for_updates` in GUI settings or run `tdn cfg check_for_updates false`.
 - **Use the system keyring.** Install with `pip install ".[gui,keyring]"` and run `tdn cfg use_keyring true`. On the next launch, an existing token moves to the keyring when available.
 
+## Install or upgrade the fork from source
 
-## 💻 Installation / Upgrade
-
-**Requirements**: Python == 3.12 (other versions might work but are not tested!)
-
-```bash
-pip install --upgrade tidal-dl-ng
-# If you like to have the GUI as well use this command instead
-pip install --upgrade tidal-dl-ng[gui]
-```
+Use Python 3.12 and install from this repository's checkout. Run `git pull` first when upgrading an existing checkout. In your active virtual environment, run `python -m pip install --upgrade .` for the CLI or `python -m pip install --upgrade ".[gui]"` for the GUI and CLI.
 
 ## ⌨️ Usage
 
@@ -102,8 +71,13 @@ tdng
 tidal-dl-ng gui
 ```
 
-If you like to have the GUI version only as a binary, have a look at the
-[release page](https://github.com/librerob/tidal-dl-ng-1/releases) and download the correct version for your platform.
+Run `tdn --help` for all commands. Use `tdn verify-files` to list missing files or changes in size or timestamp for files previously recorded by a playlist checkpoint.
+
+### Playlist recovery
+
+Reopen the same ordered playlist with the same output folder, filename template, and quality. The local SQLite checkpoint preserves completed files that still exist and are non-empty, including retagged files. Missing and empty files can be downloaded again. Generated playlist files follow the source playlist order.
+
+If the checkpoint is unreadable, the app warns you, leaves the database in place, and continues with the normal download settings, including `skip_existing`.
 
 ## 🧁 Features
 
@@ -129,8 +103,8 @@ poetry install --all-extras --with dev,docs
 The main entry points are:
 
 ```bash
-tidal_ng_dl/cli.py
-tidal_ng_dl/gui.py
+tidal_dl_ng/cli.py
+tidal_dl_ng/gui.py
 ```
 
 ### 📺 GUI Builder
@@ -161,37 +135,17 @@ make gui-macos
 
 See the `Makefile` for all available build commands.
 
-The CI/CD pipeline will be triggered when you open a pull request, merge to main, or when you create a new release.
+The [portable Windows workflow](https://github.com/librerob/tidal-dl-ng-1/actions/workflows/windows-portable.yml) tests a clean installation, builds the ZIP, and launches the extracted executable before uploading the artifact.
 
-To finalize the set-up for publishing to PyPi or Artifactory, see [here](https://fpgmaas.github.io/cookiecutter-poetry/features/publishing/#set-up-for-pypi).
-For activating the automatic documentation with MkDocs, see [here](https://fpgmaas.github.io/cookiecutter-poetry/features/mkdocs/#enabling-the-documentation-on-github).
-To enable the code coverage reports, see [here](https://fpgmaas.github.io/cookiecutter-poetry/features/codecov/).
+## Troubleshooting the packaged app
 
-## ❓ FAQ
+### Windows flags the executable
 
-### macOS Error Message: File/App is damaged and cannot be opened. You should move it to Trash..
-
-If you download an (unsigned) app from any source other than those that Apple seems suited, the application gets an extended attribute "com.apple.Quarantine". This triggers the message: "<application> is damaged and can't be opened. You should move it to the Bin."
-
-Remove the attribute and you can launch the application. [Source 1](https://discussions.apple.com/thread/253714860?sortBy=rank) [Source 2](https://www.reddit.com/r/macsysadmin/comments/13vu7f3/app_is_damaged_and_cant_be_opened_error_on_ventura/)
-
-```
-$ sudo xattr -dr com.apple.quarantine /Applications/TIDAL-Downloader-NG.app/
-```
-
-Why is this app unsigned? Only developer enrolled in the paid Apple developer program are allowed to sign (legal) apps. Without this subscription app signing is not possible.
-
-Gatekeeper really annoys you, and you like to disable it completely? Follow this [link](https://iboysoft.com/tips/how-to-disable-gatekeeper-macos-sequoia.html)
-
-### My (Windows) antivirus app XYZ says the GUI version of this app is harmful.
-
-Short answer: It is a lie. Get rid of your antivirus app.
-
-Verify the archive checksum and review your security software's report before running the app.
+The preview executable is unsigned. Check the ZIP against the SHA-256 checksum on the release page and review any warning from your security software before running it.
 
 ### I get an error when `extract_flac` is enabled.
 
-Your `path_binary_ffmpeg` is probably wrong. Please read over and over again the help of this particular option until you get it right what path to put for `path_binary_ffmpeg`.
+Set `path_binary_ffmpeg` to the full path to the FFmpeg executable and try again.
 
 ## ‼️ Disclaimer
 
@@ -206,9 +160,3 @@ Thanks to all, who have contributed to this project!
 This project is based on:
 
 - https://fpgmaas.github.io/cookiecutter-poetry/
-
-### Playlist recovery
-
-Reopen the same playlist with the same output folder, filename template and quality, then start it again. The app checks its local SQLite checkpoint and skips unchanged files it already recorded. Missing or changed files stay eligible for download. Completed paths are used to write the playlist in TIDAL order. The checkpoint applies to the same ordered playlist snapshot and does not store credentials.
-
-Use `tdn retry-failed` for standalone tracks recorded by this version. Reopen the original playlist to retry its remaining tracks in their original folders.
