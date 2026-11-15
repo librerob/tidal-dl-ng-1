@@ -47,6 +47,7 @@
 import math
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 import time
 from collections.abc import Callable, Sequence
 
@@ -98,6 +99,7 @@ from tidal_dl_ng.config import HandlingApp, Settings, Tidal
 from tidal_dl_ng.constants import FAVORITES, QualityVideo, QueueDownloadStatus, TidalLists
 from tidal_dl_ng.download import Download
 from tidal_dl_ng.logger import XStream, handler_qt, logger_gui
+from tidal_dl_ng.model.cfg import Settings as ModelSettings
 from tidal_dl_ng.model.gui_data import ProgressBars, QueueDownloadItem, ResultItem, StatusbarMessage
 from tidal_dl_ng.model.meta import ReleaseLatest
 from tidal_dl_ng.ui.main import Ui_MainWindow
@@ -1149,7 +1151,8 @@ class MainWindow(QtWidgets.QMainWindow, Ui_MainWindow):
         DialogVersion(self, update_check, update_available, update_info)
 
     def on_preferences(self) -> None:
-        DialogPreferences(settings=self.settings, settings_save=self.s_settings_save, parent=self)
+        dialog = DialogPreferences(settings=self.settings, settings_save=self.s_settings_save, parent=self)
+        dialog.exec()
 
     def on_tr_results_expanded(self, index: QtCore.QModelIndex) -> None:
         # If the child is a dummy the list_item has not been expanded before
@@ -1232,10 +1235,12 @@ def gui_activate(tidal: Tidal | None = None):
     if sys.argv[1:] == ["--portable-smoke-test"]:
         if pixmap.isNull():
             sys.exit(1)
-        probe = QtWidgets.QWidget()
+        probe = DialogPreferences(settings=SimpleNamespace(data=ModelSettings()), settings_save=None)
         probe.show()
         app.processEvents()
-        probe.close()
+        if not probe.isVisible() or not probe.ui.cb_check_for_updates.isChecked():
+            sys.exit(1)
+        probe.reject()
         sys.exit(0)
 
     window = MainWindow(tidal=tidal)
