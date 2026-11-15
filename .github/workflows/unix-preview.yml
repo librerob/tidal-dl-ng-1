@@ -14,8 +14,8 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  RELEASE_TAG: 0.24.6-preview.2
-  RELEASE_COMMIT: aac92e77c8965874be129af18d4e8db7653cfb05
+  RELEASE_TAG: 0.24.6-preview.3
+  RELEASE_COMMIT: df8167e1549cb31b6dd9cac353177a72294f0b9a
 
 jobs:
   package:
@@ -123,7 +123,7 @@ jobs:
       contents: read
     uses: ./.github/workflows/windows-portable.yml
     with:
-      source_ref: aac92e77c8965874be129af18d4e8db7653cfb05
+      source_ref: df8167e1549cb31b6dd9cac353177a72294f0b9a
 
   publish:
     if: github.ref == 'refs/heads/master'
@@ -148,6 +148,6 @@ jobs:
           printf '%s  %s\n' "${expected,,}" "$win" | sha256sum --check
           sha256sum --check tidal-dl-ng-macos-*.zip.sha256 tidal-dl-ng-linux-*.AppImage.sha256
           gh release create "$RELEASE_TAG" --target "$RELEASE_COMMIT" --prerelease \
-            --title "TIDAL Downloader NG 0.24.6 Preview 2" \
-            --notes "Fixes incomplete multi-segment downloads, preserves saved logins during validation failures, and applies a shared cooldown to media-transfer rate limits. Windows x64, macOS Apple Silicon and Intel, and Linux x86-64 packages passed packaged launch tests. SHA-256 files are included. The Windows executable is unsigned and the macOS app is not notarized." \
+            --title "TIDAL Downloader NG 0.24.6 Preview 3" \
+            --notes "Fixes Preferences failing to open. The updated smoke test opens the real Preferences dialog in the packaged application. Windows x64, macOS Apple Silicon and Intel, and Linux x86-64 packages passed. SHA-256 files are included. The Windows executable is unsigned and the macOS app is not notarized." \
             ./*.zip ./*.AppImage ./*.sha256
