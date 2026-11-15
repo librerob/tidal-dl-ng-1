@@ -17,7 +17,7 @@ jobs:
             exit 1
           fi
           python -m pip install poetry==2.5.1
-          poetry lock
+          poetry update --lock black certifi cryptography filelock idna jinja2 markdown marshmallow mkdocs-material pygments pylint pymdown-extensions pytest urllib3 virtualenv
           poetry check --lock
       - uses: actions/upload-artifact@v4
         with:
