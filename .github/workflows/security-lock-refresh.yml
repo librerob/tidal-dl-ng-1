@@ -19,6 +19,16 @@ jobs:
           python -m pip install poetry==2.5.1
           poetry update --lock black certifi cryptography filelock idna jinja2 markdown marshmallow mkdocs-material pygments pylint pymdown-extensions pytest urllib3 virtualenv
           poetry check --lock
+          python - <<'PY'
+          import base64
+          import gzip
+          from pathlib import Path
+          from textwrap import wrap
+
+          encoded = base64.b64encode(gzip.compress(Path("poetry.lock").read_bytes(), mtime=0)).decode()
+          for line in wrap(encoded, 900):
+              print("LOCK_DATA:" + line)
+          PY
       - uses: actions/upload-artifact@v4
         with:
           name: security-poetry-lock
