@@ -128,21 +128,14 @@ class DialogPreferences(QtWidgets.QDialog):
         pixmapi: QtWidgets.QStyle.StandardPixmap = QtWidgets.QStyle.SP_MessageBoxQuestion
         self.icon = self.style().standardIcon(pixmapi)
 
+        self.ui = Ui_DialogSettings()
+        self.ui.setupUi(self)
+
         self._init_checkboxes()
         self._init_comboboxes()
         self._init_line_edit()
         self._init_spin_box()
-
-        # Create an instance of the GUI
-        self.ui = Ui_DialogSettings()
-
-        # Run the .setupUi() method to show the GUI
-        self.ui.setupUi(self)
-        # Set data.
         self.gui_populate()
-        # Post setup
-
-        self.exec()
 
     def _init_line_edit(self):
         self.parameters_line_edit = [
