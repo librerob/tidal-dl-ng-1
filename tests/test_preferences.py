@@ -7,7 +7,8 @@ from tidal_dl_ng.dialog import DialogPreferences
 from tidal_dl_ng.model.cfg import Settings
 
 
-def test_preferences_opens_and_saves_update_checkbox():
+def test_preferences_opens_and_saves_update_checkbox(monkeypatch):
+    monkeypatch.setenv("QT_QPA_PLATFORM", "offscreen")
     app = QtWidgets.QApplication.instance() or QtWidgets.QApplication([])
     settings = SimpleNamespace(data=Settings())
     saved = Mock()
